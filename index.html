@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cricket Match Scheduler</title>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;padding:20px}
+        .wrap{max-width:1040px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.22);overflow:hidden}
+        .hdr{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:24px;text-align:center}
+        .hdr h1{font-size:1.95em;margin-bottom:4px}.hdr p{opacity:.85;font-size:.93em}
+        .body{padding:24px 22px}
+
+        /* auth */
+        .auth-c{text-align:center;padding:20px 0;max-width:400px;margin:0 auto}
+        .auth-tabs{display:flex;border-bottom:2px solid #e0e0e0;margin-bottom:22px}
+        .auth-tab{flex:1;background:none;border:none;border-bottom:3px solid transparent;padding:9px;font-size:.88em;font-weight:600;color:#888;cursor:pointer;margin-bottom:-2px;transition:all .18s}
+        .auth-tab:hover{color:#667eea}
+        .auth-tab.active{color:#667eea;border-bottom-color:#667eea}
+        .auth-box{text-align:left}
+        .auth-box input{display:block;width:100%;margin:7px 0}
+        .auth-box button{width:100%;margin:6px 0}
+        .gbtn{background:#fff;border:2px solid #667eea;padding:11px 26px;border-radius:6px;cursor:pointer;font-size:1em;display:inline-flex;align-items:center;gap:9px;transition:all .2s;width:100%;justify-content:center}
+        .gbtn:hover{background:#667eea;color:#fff}
+        .auth-note{font-size:.8em;color:#aaa;margin-top:8px;text-align:center}
+        .auth-or{text-align:center;color:#bbb;font-size:.82em;margin:10px 0}
+        .auth-link{background:none;border:none;color:#667eea;cursor:pointer;font-size:.85em;text-decoration:underline;padding:0;width:auto;display:inline;margin:0}
+        .auth-link:hover{background:none;color:#5568d3}
+
+        /* user bar */
+        .ubar{background:#f4f4f8;padding:12px 16px;border-radius:8px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px}
+        .ubar small{color:#888;display:block;margin-top:2px}
+        .bdg{display:inline-block;padding:2px 9px;border-radius:11px;font-size:.75em;font-weight:700;margin-left:7px;color:#fff}
+        .bdg.owner{background:#e67e22}.bdg.organizer{background:#27ae60}.bdg.captain{background:#2980b9}.bdg.player{background:#7f8c8d}
+
+        /* session timeout */
+        .session-warn{background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:9px 16px;border-radius:8px;margin-bottom:14px;font-size:.87em;display:flex;align-items:center;justify-content:space-between;gap:10px}
+        #session-timer{font-weight:700;font-size:.82em;color:#888;white-space:nowrap}
+
+        /* tabs */
+        .tab-bar{display:flex;border-bottom:2px solid #e0e0e0;margin-bottom:18px;flex-wrap:wrap;gap:2px}
+        .tab-btn{background:none;border:none;border-bottom:3px solid transparent;padding:9px 15px;font-size:.88em;font-weight:600;color:#888;cursor:pointer;transition:all .18s;margin-bottom:-2px;border-radius:4px 4px 0 0}
+        .tab-btn:hover{color:#667eea;background:#f0f0ff}
+        .tab-btn.active{color:#667eea;border-bottom-color:#667eea;background:#f5f6ff}
+        @media(max-width:600px){.tab-btn{padding:7px 10px;font-size:.81em}}
+
+        /* sections */
+        .sec{margin:14px 0;padding:17px 19px;background:#f9f9fc;border-radius:10px;border-left:4px solid #667eea}
+        .sec-t{font-size:1.12em;font-weight:700;color:#333;margin-bottom:12px}
+
+        input,textarea,select{width:100%;padding:9px 11px;margin:5px 0;border:1px solid #ddd;border-radius:6px;font-size:.9em;background:#fff}
+        button{background:#667eea;color:#fff;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:.9em;transition:background .2s;margin:5px 3px 5px 0}
+        button:hover{background:#5568d3}
+        .br{background:#e74c3c}.br:hover{background:#c0392b}
+        .bg{background:#27ae60}.bg:hover{background:#1e8449}
+        .bo{background:#e67e22}.bo:hover{background:#ca6f1e}
+        .bsm{padding:4px 10px;font-size:.78em;margin:0 2px}
+
+        .g2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+        .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+        .g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:9px}
+        @media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+        .lbl{font-size:.79em;color:#777;margin-bottom:1px;font-weight:600}
+
+        /* cards */
+        .card{background:#fff;padding:11px 14px;margin:6px 0;border-radius:8px;border:1px solid #eee;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px}
+        .ct{font-weight:600;color:#333}.cs{font-size:.81em;color:#777;margin-top:2px}
+
+        /* slot card */
+        .slot-def{background:#fff;border:1px solid #c5cae9;border-radius:8px;padding:11px 14px;margin:6px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px}
+        .slot-def .sd{font-weight:600;color:#3949ab;font-size:.92em}
+        .slot-def .ss{font-size:.8em;color:#666;margin-top:2px}
+
+        /* captain slot pick */
+        .slot-pick{background:#fff;border:1px solid #ddd;border-radius:8px;margin:6px 0;overflow:hidden}
+        .slot-pick .sp-h{padding:10px 14px;background:#f5f5f5;display:flex;align-items:center;gap:10px}
+        .slot-pick .sp-h input[type=checkbox]{width:auto;margin:0;cursor:pointer;accent-color:#667eea;width:17px;height:17px}
+        .slot-pick .sp-h label{cursor:pointer;font-weight:600;font-size:.9em;color:#333;flex:1}
+        .slot-pick .sp-b{padding:7px 14px;font-size:.81em;color:#666}
+
+        /* match timeline */
+        .mcard{background:#fff;border:1px solid #e0e0e0;border-radius:9px;padding:13px 16px;margin:8px 0}
+        .mcard .mh{font-weight:700;color:#333;font-size:.97em;margin-bottom:5px}
+        .mcard .ms{font-size:.81em;color:#666;margin-bottom:8px}
+        .timeline{display:flex;border-radius:5px;overflow:hidden;font-size:.76em;font-weight:600}
+        .tl-m{background:#667eea;color:#fff;padding:5px 10px;flex:1}
+        .tl-b{background:#f39c12;color:#fff;padding:5px 10px}
+
+        /* booking */
+        .book-slot{background:#fff;border:1px solid #eee;border-radius:9px;margin:8px 0;overflow:hidden}
+        .book-slot .bsh{background:#e8eaf6;padding:10px 14px;font-weight:700;font-size:.92em;color:#3949ab;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+        .book-slot .bsb{padding:10px 14px}
+        .avail-team{display:inline-block;background:#d5f5e3;color:#1e8449;border:1px solid #a9dfbf;padding:3px 10px;border-radius:11px;font-size:.79em;font-weight:600;margin:2px}
+
+        /* busy row */
+        .brow{background:#fdecea;border-left:3px solid #e74c3c;padding:7px 11px;margin:4px 0;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:7px;flex-wrap:wrap}
+        .brow .bt{font-weight:600;color:#c0392b;font-size:.87em}
+        .brow .br2{color:#888;font-size:.8em}
+
+        /* player cards */
+        .pcard{background:#fff;border:1px solid #eee;border-radius:8px;margin:7px 0;overflow:hidden}
+        .pcard .ph{background:#f0f4ff;padding:9px 13px;font-weight:600;font-size:.91em;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+        .pcard .pb{padding:9px 13px}
+        .ftag{background:#d5f5e3;color:#1e8449;padding:2px 9px;border-radius:10px;font-size:.77em;font-weight:700;display:inline-block}
+        .btag{background:#fdecea;color:#c0392b;padding:2px 9px;border-radius:10px;font-size:.77em;font-weight:700;display:inline-block}
+
+        .tpkr{background:#eef0ff;padding:11px 14px;border-radius:8px;margin-bottom:13px;display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+        .tpkr label{font-weight:600;color:#555;white-space:nowrap}
+        .tpkr select{margin:0;flex:1;min-width:180px}
+
+        .managing-banner{background:#667eea;color:#fff;padding:11px 16px;border-radius:8px;margin-bottom:14px;font-weight:600;font-size:.95em}
+        .info{background:#fff8e1;border-left:4px solid #f39c12;padding:11px 14px;border-radius:8px;margin-bottom:14px;font-size:.87em;color:#7d5a00}
+        .empty{color:#aaa;font-style:italic;font-size:.86em;padding:5px 0}
+        hr{border:none;border-top:1px solid #eee;margin:13px 0}
+
+        /* match table */
+        .mtbl{width:100%;border-collapse:collapse;font-size:.84em}
+        .mtbl th{background:#f0f2ff;color:#3949ab;font-weight:700;padding:8px 10px;text-align:left;border-bottom:2px solid #c5cae9;white-space:nowrap}
+        .mtbl td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+        .mtbl tr:last-child td{border-bottom:none}
+        .mtbl tr:hover td{background:#fafbff}
+        .vs-badge{font-weight:700;color:#333}
+        .tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid #e8eaf6}
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="hdr">
+        <h1>🏏 Cricket Match Scheduler</h1>
+        <p>Tournaments · Flexible Slots · Team Coordination</p>
+    </div>
+    <div class="body">
+
+        <!-- Sign in -->
+        <div id="auth-view" class="auth-c">
+            <p style="margin-bottom:18px;font-size:1.04em;text-align:center">Sign in to continue</p>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="atab-google" onclick="switchAuthTab('google')">🔵 Google</button>
+                <button class="auth-tab" id="atab-email" onclick="switchAuthTab('email')">✉️ Email</button>
+            </div>
+
+            <!-- Google -->
+            <div id="auth-google" class="auth-box">
+                <button class="gbtn" onclick="signIn()">🔵 Sign in with Google</button>
+                <p class="auth-note">Recommended for organizers and the owner.</p>
+            </div>
+
+            <!-- Email / Password -->
+            <div id="auth-email" class="auth-box" style="display:none">
+                <div id="email-signin-form">
+                    <input id="ep-email" type="email" placeholder="Email *"/>
+                    <input id="ep-pass" type="password" placeholder="Password *"/>
+                    <button onclick="signInEmail()">Sign In</button>
+                    <div class="auth-or">Don't have an account? <button class="auth-link" onclick="showEmailSignup()">Sign Up</button></div>
+                </div>
+                <div id="email-signup-form" style="display:none">
+                    <input id="es-name" placeholder="Full name *"/>
+                    <input id="es-email" type="email" placeholder="Email *"/>
+                    <input id="es-pass" type="password" placeholder="Password (min 6 chars) *"/>
+                    <button class="bg" onclick="signUpEmail()">Create Account</button>
+                    <div class="auth-or">Already have an account? <button class="auth-link" onclick="showEmailSignin()">Sign In</button></div>
+                </div>
+            </div>
+
+            <div id="auth-err" style="color:#c0392b;font-size:.84em;margin-top:10px;text-align:center"></div>
+        </div>
+
+        <div id="app-view" style="display:none">
+            <!-- User bar -->
+            <div class="ubar">
+                <div>
+                    <strong id="u-name"></strong><span id="u-bdg" class="bdg"></span>
+                    <small id="u-email"></small>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                    <span id="session-timer" title="Session active time"></span>
+                    <button class="br" onclick="logout()">Sign Out</button>
+                </div>
+            </div>
+
+            <!-- Session timeout warning -->
+            <div id="session-warn" class="session-warn" style="display:none">
+                ⚠️ <span id="warn-msg">Your session will expire soon due to inactivity.</span>
+                <button onclick="resetActivity()" style="padding:4px 12px;font-size:.83em;margin:0">Stay Logged In</button>
+            </div>
+
+            <!-- ═══ OWNER / ORGANIZER ═══ -->
+            <div id="manage-panel" style="display:none">
+                <div id="managing-banner" style="display:none" class="managing-banner"></div>
+                <div class="tpkr" id="t-pkr" style="display:none">
+                    <label>📌 Tournament:</label>
+                    <select id="t-sel" onchange="selT(this.value)"><option value="">-- Select --</option></select>
+                </div>
+
+                <!-- Tab bar — Tournaments tab shown only for owner -->
+                <div class="tab-bar" id="manage-tab-bar">
+                    <button class="tab-btn active" id="tbtn-tournaments" onclick="switchManageTab('tournaments')">🏆 Tournaments</button>
+                    <button class="tab-btn" id="tbtn-teams" onclick="switchManageTab('teams')">👥 Teams</button>
+                    <button class="tab-btn" id="tbtn-slots" onclick="switchManageTab('slots')">🗓️ Slots</button>
+                    <button class="tab-btn" id="tbtn-book" onclick="switchManageTab('book')">📊 Book Match</button>
+                    <button class="tab-btn" id="tbtn-matches" onclick="switchManageTab('matches')">✅ Matches</button>
+                </div>
+
+                <!-- Tournaments pane (owner only) -->
+                <div id="pane-tournaments">
+                    <div class="sec">
+                        <div class="sec-t">🏆 Create Tournament</div>
+                        <div class="g2">
+                            <input id="t-name" placeholder="Tournament name *"/>
+                            <input id="t-org" placeholder="Organizer email (optional)"/>
+                        </div>
+                        <textarea id="t-desc" rows="2" placeholder="Description (optional)"></textarea>
+                        <button onclick="createT()">➕ Create Tournament</button>
+                    </div>
+                    <div class="sec">
+                        <div class="sec-t">📋 All Tournaments</div>
+                        <div id="all-t"><p class="empty">None yet.</p></div>
+                    </div>
+                </div>
+
+                <!-- Teams pane -->
+                <div id="pane-teams" style="display:none">
+                    <div class="sec">
+                        <div class="sec-t">👥 Add Team</div>
+                        <div class="g2">
+                            <input id="tm-name" placeholder="Team name *"/>
+                            <input type="number" id="tm-pl" placeholder="Number of players *"/>
+                        </div>
+                        <div class="sec-t" style="font-size:.9em;margin:10px 0 6px;color:#555">Captain details</div>
+                        <div class="g2">
+                            <input id="tm-capname" placeholder="Captain name *"/>
+                            <input type="email" id="tm-cap" placeholder="Captain email *"/>
+                        </div>
+                        <button onclick="addTeam()">➕ Add Team</button>
+                        <hr>
+                        <div id="teams-list"><p class="empty">No teams yet.</p></div>
+                    </div>
+                </div>
+
+                <!-- Slots pane -->
+                <div id="pane-slots" style="display:none">
+                    <!-- Bulk generator -->
+                    <div class="sec">
+                        <div class="sec-t">🗓️ Generate Slots for Tournament</div>
+                        <p style="font-size:.84em;color:#888;margin-bottom:12px">
+                            Pick the match dates, set the daily play window and match length — slots are created automatically for every date.
+                        </p>
+
+                        <!-- Date picker -->
+                        <div class="lbl" style="margin-bottom:4px">Match dates</div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+                            <input type="date" id="sl-datepick" style="width:auto;flex:1;min-width:160px;margin:0"/>
+                            <button onclick="addSlotDate()" style="margin:0;padding:7px 14px">+ Add date</button>
+                        </div>
+                        <div id="sl-dates-tags" style="display:flex;flex-wrap:wrap;gap:6px;min-height:26px;margin-bottom:13px"></div>
+
+                        <!-- Times + duration + break -->
+                        <div class="g4">
+                            <div><div class="lbl">Day starts (first match)</div><input type="time" id="sl-start"/></div>
+                            <div><div class="lbl">Day ends (no new match after)</div><input type="time" id="sl-end"/></div>
+                            <div><div class="lbl">Match duration (mins)</div><input type="number" id="sl-dur" placeholder="e.g. 90" min="1"/></div>
+                            <div><div class="lbl">Break between matches (mins)</div><input type="number" id="sl-brk" placeholder="e.g. 30 or 0"/></div>
+                        </div>
+
+                        <div id="sl-preview" style="font-size:.83em;color:#667eea;margin:6px 0 10px;font-weight:600"></div>
+                        <button class="bg" onclick="generateSlots()" id="gen-btn">⚡ Generate Slots</button>
+                    </div>
+
+                    <!-- Manual single slot -->
+                    <details style="margin-bottom:14px">
+                        <summary style="cursor:pointer;font-size:.86em;color:#888;padding:6px 0;user-select:none">➕ Add a single slot manually</summary>
+                        <div class="sec" style="margin-top:8px">
+                            <div class="g4">
+                                <div><div class="lbl">Date</div><input type="date" id="sl1-date"/></div>
+                                <div><div class="lbl">Start time</div><input type="time" id="sl1-start"/></div>
+                                <div><div class="lbl">Match duration (mins)</div><input type="number" id="sl1-dur" placeholder="e.g. 90" min="1"/></div>
+                                <div><div class="lbl">Break after (mins)</div><input type="number" id="sl1-brk" placeholder="0"/></div>
+                            </div>
+                            <input id="sl1-label" placeholder="Label (optional)"/>
+                            <button class="bo" onclick="addSlot()">➕ Add Single Slot</button>
+                        </div>
+                    </details>
+
+                    <div class="sec">
+                        <div class="sec-t" style="font-size:1em;margin-bottom:8px">Defined Slots <span id="slot-count" style="font-size:.78em;font-weight:400;color:#888"></span></div>
+                        <div id="slots-list"><p class="empty">No slots yet.</p></div>
+                    </div>
+                </div>
+
+                <!-- Book Match pane -->
+                <div id="pane-book" style="display:none">
+                    <!-- Custom / override booking -->
+                    <details id="custom-book-details" style="margin-bottom:14px">
+                        <summary style="cursor:pointer;font-weight:600;color:#667eea;padding:10px 0;user-select:none;font-size:.93em">⚡ Schedule a match at any time (no slot required)</summary>
+                        <div class="sec" style="margin-top:8px">
+                            <div class="g4">
+                                <div><div class="lbl">Date</div><input type="date" id="cm-date"/></div>
+                                <div><div class="lbl">Start time</div><input type="time" id="cm-start"/></div>
+                                <div><div class="lbl">Match duration (mins)</div><input type="number" id="cm-dur" placeholder="e.g. 90" min="1"/></div>
+                                <div><div class="lbl">Break after (mins, optional)</div><input type="number" id="cm-brk" placeholder="0"/></div>
+                            </div>
+                            <div class="g3" style="margin-top:4px">
+                                <div><div class="lbl">Team 1</div><select id="cm-t1"><option value="">-- Select --</option></select></div>
+                                <div><div class="lbl">Team 2</div><select id="cm-t2"><option value="">-- Select --</option></select></div>
+                                <div><div class="lbl">Venue</div><input id="cm-venue" placeholder="Venue *"/></div>
+                            </div>
+                            <button class="bg" onclick="bookCustomMatch()" style="margin-top:6px">📅 Schedule Match</button>
+                        </div>
+                    </details>
+
+                    <div class="sec">
+                        <div class="sec-t">📊 Slot Availability &amp; Booking</div>
+                        <p style="font-size:.84em;color:#888;margin-bottom:11px">
+                            All slots are shown. Green tags = teams that picked this slot. You can book any slot regardless of team selection.
+                        </p>
+                        <div id="booking-view"><p class="empty">Loading slots…</p></div>
+                    </div>
+                </div>
+
+                <!-- Matches pane -->
+                <div id="pane-matches" style="display:none">
+                    <div class="sec">
+                        <div class="sec-t">✅ Scheduled Matches</div>
+                        <div id="matches-list"><p class="empty">No matches yet.</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ CAPTAIN ═══ -->
+            <div id="captain-panel" style="display:none">
+                <div class="info">ℹ️ As <strong>captain</strong>, select which slots your team is available for. Your organizer will use this to book matches.</div>
+
+                <div class="tab-bar">
+                    <button class="tab-btn active" id="ctbtn-avail" onclick="switchCapTab('avail')">🗓️ My Availability</button>
+                    <button class="tab-btn" id="ctbtn-players" onclick="switchCapTab('players')">👥 Player Availability</button>
+                </div>
+
+                <!-- Availability pane -->
+                <div id="cpane-avail">
+                    <div class="sec">
+                        <div class="sec-t">🗓️ Select Your Team's Available Slots</div>
+                        <p style="font-size:.84em;color:#888;margin-bottom:11px">Check every slot when your team can play. You can change your selection anytime.</p>
+                        <div id="cap-slots"><p class="empty">No slots defined yet — wait for your organizer to add them.</p></div>
+                        <button class="bg" id="cap-save-btn" style="display:none;margin-top:10px" onclick="saveCapSlots()">💾 Save My Availability</button>
+                    </div>
+                </div>
+
+                <!-- Players pane -->
+                <div id="cpane-players" style="display:none">
+                    <div class="sec">
+                        <div class="sec-t">👥 My Players' Busy Blocks</div>
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:11px">
+                            <input type="date" id="cap-date" style="flex:1;min-width:150px;margin:0"/>
+                            <button onclick="loadCapPlayerAvail()" style="margin:0">View</button>
+                        </div>
+                        <div id="cap-player-avail"><p class="empty">Select a date.</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ PLAYER ═══ -->
+            <div id="player-panel" style="display:none">
+                <div class="sec">
+                    <div class="sec-t">🚫 Block My Busy Times</div>
+                    <p style="font-size:.86em;color:#888;margin-bottom:10px">Mark when you <strong>cannot</strong> play. Everything outside these blocks = free for your captain to see.</p>
+                    <div class="g3">
+                        <div><div class="lbl">Date</div><input type="date" id="b-date"/></div>
+                        <div><div class="lbl">Busy from</div><input type="time" id="b-from"/></div>
+                        <div><div class="lbl">Busy until</div><input type="time" id="b-to"/></div>
+                    </div>
+                    <input id="b-reason" placeholder="Reason (optional — work, travel, family…)"/>
+                    <button class="br" onclick="saveBusy()">🚫 Mark as Busy</button>
+                    <hr>
+                    <div class="sec-t" style="font-size:1em;margin-bottom:8px">My Busy Blocks</div>
+                    <div id="my-busy"><p class="empty">Nothing blocked — you're free! 🎉</p></div>
+                </div>
+            </div>
+
+        </div><!-- /app-view -->
+    </div>
+</div>
+
+<script>
+const OWNER='akshaydindure@gmail.com';
+const SESSION_TIMEOUT=60*60*1000;   // 1 hour
+const WARN_BEFORE=5*60*1000;        // warn 5 min before expiry
+
+firebase.initializeApp({
+    apiKey:"AIzaSyCoOHl_EbBizVSGpA1xvylvmMBIaRKSXM4",
+    authDomain:"cricket-scheduler-771bd.firebaseapp.com",
+    projectId:"cricket-scheduler-771bd",
+    storageBucket:"cricket-scheduler-771bd.firebasestorage.app",
+    messagingSenderId:"457930766031",
+    appId:"1:457930766031:web:ec5d694d606b64c72669ba"
+});
+const db=firebase.firestore(), auth=firebase.auth();
+let me=null, myRole=null, selTId=null, capTeam=null;
+let lastActivity=Date.now(), sessionInterval=null;
+
+// ── Session Timeout ────────────────────────────────────────────────────────────
+function resetActivity(){
+    lastActivity=Date.now();
+    hide('session-warn');
+}
+
+function startSessionTimer(){
+    if(sessionInterval) clearInterval(sessionInterval);
+    lastActivity=Date.now();
+    sessionInterval=setInterval(()=>{
+        const idle=Date.now()-lastActivity;
+        const remaining=SESSION_TIMEOUT-idle;
+        const mins=Math.ceil(remaining/60000);
+
+        if($('session-timer')){
+            const elapsed=Math.floor(idle/60000);
+            $('session-timer').textContent=`Session idle: ${elapsed}m`;
+        }
+
+        if(remaining<=0){
+            clearInterval(sessionInterval);
+            sessionInterval=null;
+            hide('session-warn');
+            logout(true);
+        } else if(remaining<=WARN_BEFORE){
+            const sw=$('session-warn');
+            if(sw){
+                sw.style.display='flex';
+                $('warn-msg').textContent=`Session expires in ${mins} minute${mins!==1?'s':''} due to inactivity.`;
+            }
+        }
+    },30000);
+}
+
+function stopSessionTimer(){
+    if(sessionInterval){ clearInterval(sessionInterval); sessionInterval=null; }
+    const t=$('session-timer');
+    if(t) t.textContent='';
+    hide('session-warn');
+}
+
+['mousemove','keypress','click','scroll','touchstart'].forEach(ev=>
+    document.addEventListener(ev, resetActivity, {passive:true})
+);
+
+// ── Auth tab switching ────────────────────────────────────────────────────────
+function switchAuthTab(tab){
+    ['google','email'].forEach(t=>{
+        const p=$('auth-'+t), b=$('atab-'+t);
+        if(p) p.style.display=t===tab?'block':'none';
+        if(b) b.classList.toggle('active',t===tab);
+    });
+    $('auth-err').textContent='';
+}
+function authErr(msg){ $('auth-err').textContent=msg; }
+
+// ── Google ────────────────────────────────────────────────────────────────────
+function signIn(){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).then(r=>boot(r.user)).catch(e=>authErr(e.message)); }
+
+// ── Email / Password ──────────────────────────────────────────────────────────
+function showEmailSignup(){ hide('email-signin-form'); show('email-signup-form'); $('auth-err').textContent=''; }
+function showEmailSignin(){ hide('email-signup-form'); show('email-signin-form'); $('auth-err').textContent=''; }
+
+function signInEmail(){
+    const email=v('ep-email'), pass=v('ep-pass');
+    if(!email||!pass){authErr('Enter email and password.');return;}
+    auth.signInWithEmailAndPassword(email,pass).then(r=>boot(r.user)).catch(e=>authErr(e.message));
+}
+
+function signUpEmail(){
+    const name=v('es-name'), email=v('es-email'), pass=v('es-pass');
+    if(!name||!email||!pass){authErr('All fields are required.');return;}
+    if(pass.length<6){authErr('Password must be at least 6 characters.');return;}
+    auth.createUserWithEmailAndPassword(email,pass).then(r=>{
+        return r.user.updateProfile({displayName:name}).then(()=>{
+            db.collection('users').doc(email).set({name, email, uid:r.user.uid, role:'player'},{merge:true});
+            boot(r.user);
+        });
+    }).catch(e=>authErr(e.message));
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+function logout(expired=false){
+    stopSessionTimer();
+    auth.signOut().then(()=>{
+        me=null; myRole=null; selTId=null; capTeam=null;
+        hide('app-view'); show('auth-view');
+        switchAuthTab('google');
+        ['manage-panel','captain-panel','player-panel'].forEach(hide);
+        if(expired) setTimeout(()=>alert('You were signed out after 1 hour of inactivity.'),100);
+    });
+}
+
+async function boot(user){
+    me=user; show('app-view'); hide('auth-view');
+    $('u-name').textContent=user.displayName||user.email||'User';
+    $('u-email').textContent=user.email||'';
+    startSessionTimer();
+
+    if(user.email===OWNER){
+        setRole('owner');
+        db.collection('users').doc(user.email).set({email:user.email,name:user.displayName,role:'owner'},{merge:true});
+        show('manage-panel');
+        show('tbtn-tournaments');
+        switchManageTab('tournaments');
+        loadAllT();
+        return;
+    }
+    const ud=await db.collection('users').doc(user.email).get();
+    const role=ud.exists?ud.data().role||'player':'player';
+
+    if(role==='organizer'){
+        setRole('organizer');
+        hide('tbtn-tournaments');
+        show('manage-panel');
+        loadMyT();
+        return;
+    }
+    let cc=null;
+    if(user.email) cc=await db.collection('teams').where('captainEmail','==',user.email).limit(1).get();
+    if(cc&&!cc.empty){
+        capTeam={id:cc.docs[0].id,...cc.docs[0].data()};
+        setRole('captain');
+        db.collection('users').doc(user.email).set({name:user.displayName||'',email:user.email,role:'captain'},{merge:true});
+        show('captain-panel');
+        $('cap-date').value=today();
+        loadCapSlots();
+        return;
+    }
+    setRole('player');
+    if(!ud.exists) db.collection('users').doc(user.email).set({name:user.displayName||'',email:user.email,role:'player'});
+    show('player-panel'); loadMyBusy();
+}
+
+function setRole(r){ myRole=r; const b=$('u-bdg'); b.textContent=r; b.className='bdg '+r; }
+auth.onAuthStateChanged(u=>{ if(u&&u.email) boot(u); });
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+const MANAGE_TABS=['tournaments','teams','slots','book','matches'];
+function switchManageTab(name){
+    MANAGE_TABS.forEach(t=>{
+        const pane=$('pane-'+t), btn=$('tbtn-'+t);
+        if(pane) pane.style.display=t===name?'block':'none';
+        if(btn) btn.classList.toggle('active',t===name);
+    });
+    // lazy-load data when tab is first opened
+    if(selTId){
+        if(name==='teams') loadTeams();
+        if(name==='slots') loadSlots();
+        if(name==='book')  loadBookingView();
+        if(name==='matches') loadMatches();
+    }
+}
+
+const CAP_TABS=['avail','players'];
+function switchCapTab(name){
+    CAP_TABS.forEach(t=>{
+        const pane=$('cpane-'+t), btn=$('ctbtn-'+t);
+        if(pane) pane.style.display=t===name?'block':'none';
+        if(btn) btn.classList.toggle('active',t===name);
+    });
+}
+
+// ── Owner: Tournaments ────────────────────────────────────────────────────────
+function createT(){
+    const name=v('t-name'), org=v('t-org').toLowerCase(), desc=v('t-desc');
+    if(!name){alert('Name required');return;}
+    const btn=document.querySelector('#pane-tournaments button');
+    btn.disabled=true; btn.textContent='Creating…';
+    db.collection('tournaments').add({name,desc,organizers:org?[org]:[],createdBy:me.email,createdAt:new Date()}).then(()=>{
+        if(org) db.collection('users').doc(org).set({email:org,role:'organizer'},{merge:true});
+        ['t-name','t-org','t-desc'].forEach(id=>$(id).value='');
+        loadAllT();
+    }).catch(e=>alert('Failed: '+e.message))
+    .finally(()=>{ btn.disabled=false; btn.textContent='➕ Create Tournament'; });
+}
+
+function loadAllT(){
+    db.collection('tournaments').get().then(snap=>{
+        $('all-t').innerHTML=snap.empty?'<p class="empty">None yet.</p>':snap.docs.map(d=>{
+            const t=d.data(), org=t.organizers?.length?t.organizers.join(', '):'<em>You</em>';
+            return`<div class="card" id="tc-${d.id}"><div style="flex:1"><div class="ct">🏏 ${esc(t.name)}</div><div class="cs">Organizer: ${org}</div></div>
+            <div><button class="bsm" onclick="ownerPick('${d.id}','${esc(t.name)}')">Manage</button><button class="bsm br" onclick="delT('${d.id}','${esc(t.name)}')">Delete</button></div></div>`;
+        }).join('');
+    });
+}
+
+function ownerPick(id,name){
+    selTId=id;
+    const banner=$('managing-banner');
+    banner.textContent='Managing: '+(name||id);
+    banner.style.display='block';
+    switchManageTab('teams');
+    loadTeams();
+}
+
+function delT(id,name){
+    if(!confirm('Delete tournament "'+name+'"? This cannot be undone.')) return;
+    db.collection('tournaments').doc(id).delete().then(()=>{
+        loadAllT();
+        if(selTId===id){
+            selTId=null;
+            $('managing-banner').style.display='none';
+            ['teams-list','slots-list','booking-view','matches-list'].forEach(el=>{
+                const e=$(el); if(e) e.innerHTML='<p class="empty">Select a tournament above.</p>';
+            });
+        }
+    }).catch(e=>alert('Delete failed: '+e.message));
+}
+
+// ── Organizer ─────────────────────────────────────────────────────────────────
+function loadMyT(){
+    db.collection('tournaments').where('organizers','array-contains',me.email).get().then(snap=>{
+        const list=snap.docs.map(d=>({id:d.id,...d.data()}));
+        if(!list.length){ show('t-pkr'); return; }
+        if(list.length===1){
+            selTId=list[0].id;
+            hide('t-pkr');
+            $('managing-banner').textContent='Managing: '+list[0].name;
+            $('managing-banner').style.display='block';
+            switchManageTab('teams');
+            loadTeams();
+        } else {
+            const s=$('t-sel');
+            s.innerHTML='<option value="">-- Select --</option>'+list.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
+            show('t-pkr');
+            switchManageTab('teams');
+        }
+    });
+}
+
+function selT(id){
+    selTId=id;
+    if(!id) return;
+    const name=$('t-sel').options[$('t-sel').selectedIndex]?.text;
+    $('managing-banner').textContent='Managing: '+(name||id);
+    $('managing-banner').style.display='block';
+    loadTeams(); loadSlots(); loadBookingView(); loadMatches();
+}
+
+// ── Teams ─────────────────────────────────────────────────────────────────────
+function addTeam(){
+    const name=v('tm-name'), capName=v('tm-capname'), capEmail=v('tm-cap'), pl=v('tm-pl');
+    if(!name||!capName||!capEmail||!pl){alert('Team name, captain name, captain email and number of players are required.');return;}
+    if(!selTId){alert('No tournament selected');return;}
+    db.collection('teams').add({name, captainName:capName, captainEmail:capEmail,
+        playerCount:+pl, tournamentId:selTId, createdAt:new Date()}).then(()=>{
+        db.collection('users').doc(capEmail).set({name:capName, email:capEmail, role:'captain'},{merge:true});
+        ['tm-name','tm-capname','tm-cap','tm-pl'].forEach(id=>$(id).value='');
+        loadTeams();
+    }).catch(e=>alert('Error: '+e.message));
+}
+
+function delTeam(id){ db.collection('teams').doc(id).delete().then(loadTeams); }
+
+function loadTeams(){
+    if(!selTId) return;
+    db.collection('teams').where('tournamentId','==',selTId).get().then(snap=>{
+        $('teams-list').innerHTML=snap.empty?'<p class="empty">No teams.</p>':snap.docs.map(d=>{
+            const t=d.data();
+            const capDetail=[t.captainName?esc(t.captainName):'', t.captainEmail?`✉️ ${esc(t.captainEmail)}`:''].filter(Boolean).join(' · ');
+            return`<div class="card"><div style="flex:1">
+                <div class="ct">👥 ${esc(t.name)}</div>
+                <div class="cs">Captain: ${capDetail} · ${t.playerCount} players</div>
+            </div><button class="bsm br" onclick="delTeam('${d.id}')">Remove</button></div>`;
+        }).join('');
+    });
+}
+
+// ── Match Slots ───────────────────────────────────────────────────────────────
+let slotDates=[];
+
+function addSlotDate(){
+    const d=v('sl-datepick');
+    if(!d){alert('Pick a date first.');return;}
+    if(slotDates.includes(d)){alert('Date already added.');return;}
+    slotDates.push(d);
+    slotDates.sort();
+    renderSlotDateTags();
+    $('sl-datepick').value='';
+    updateSlotPreview();
+}
+
+function removeSlotDate(d){
+    slotDates=slotDates.filter(x=>x!==d);
+    renderSlotDateTags();
+    updateSlotPreview();
+}
+
+function renderSlotDateTags(){
+    $('sl-dates-tags').innerHTML=slotDates.map(d=>
+        `<span style="background:#e8eaf6;color:#3949ab;padding:4px 10px;border-radius:12px;font-size:.82em;font-weight:600;display:inline-flex;align-items:center;gap:6px">
+            📅 ${d}
+            <span onclick="removeSlotDate('${d}')" style="cursor:pointer;color:#c0392b;font-weight:700;font-size:1em" title="Remove">✕</span>
+        </span>`
+    ).join('');
+}
+
+function t2m(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+function m2t(m){ return`${String(Math.floor(m/60)%24).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
+
+function updateSlotPreview(){
+    const start=v('sl-start'), end=v('sl-end'), dur=parseInt(v('sl-dur')||'0'), brk=parseInt(v('sl-brk')||'0');
+    const prev=$('sl-preview');
+    if(!prev) return;
+    if(!start||!end||!dur||slotDates.length===0){prev.textContent='';return;}
+    const startM=t2m(start), endM=t2m(end), step=dur+brk;
+    if(startM>=endM||step<=0){prev.textContent='';return;}
+    let count=0, cur=startM;
+    while(cur+dur<=endM){count++;cur+=step;}
+    prev.textContent=`→ ${count} slot${count!==1?'s':''} per day × ${slotDates.length} date${slotDates.length!==1?'s':''} = ${count*slotDates.length} slots total`;
+}
+
+// wire up live preview on input change
+['sl-start','sl-end','sl-dur','sl-brk'].forEach(id=>{
+    document.addEventListener('DOMContentLoaded',()=>{
+        const el=$(id); if(el) el.addEventListener('input',updateSlotPreview);
+    });
+});
+// also fire after page loads (inputs may already exist)
+setTimeout(()=>{['sl-start','sl-end','sl-dur','sl-brk'].forEach(id=>{const el=$(id);if(el)el.addEventListener('input',updateSlotPreview);});},200);
+
+async function generateSlots(){
+    if(!selTId){alert('No tournament selected.');return;}
+    const start=v('sl-start'), end=v('sl-end'), dur=parseInt(v('sl-dur')||'0'), brk=parseInt(v('sl-brk')||'0');
+    if(!slotDates.length){alert('Add at least one date.');return;}
+    if(!start||!end){alert('Set the daily start and end time.');return;}
+    if(!dur){alert('Set the match duration.');return;}
+    const startM=t2m(start), endM=t2m(end);
+    if(startM>=endM){alert('Start time must be before end time.');return;}
+
+    const step=dur+brk;
+    const slots=[];
+    for(const date of slotDates){
+        let cur=startM;
+        while(cur+dur<=endM){
+            const slotStart=m2t(cur), slotEnd=m2t(cur+dur);
+            const breakEndTime=brk>0?m2t(cur+dur+brk):null;
+            slots.push({tournamentId:selTId, date, startTime:slotStart, endTime:slotEnd,
+                durationMins:dur, breakMins:brk, breakEndTime, label:'', createdAt:new Date()});
+            cur+=step;
+        }
+    }
+
+    if(!slots.length){alert('No slots fit in the given time window. Check duration vs. start/end times.');return;}
+    if(!confirm(`This will create ${slots.length} slot${slots.length!==1?'s':''} across ${slotDates.length} date${slotDates.length!==1?'s':''}. Continue?`)) return;
+
+    const btn=$('gen-btn'); btn.disabled=true; btn.textContent='Generating…';
+    try{
+        // Firestore batch limit is 500 writes
+        for(let i=0;i<slots.length;i+=499){
+            const batch=db.batch();
+            slots.slice(i,i+499).forEach(s=>batch.set(db.collection('matchSlots').doc(),s));
+            await batch.commit();
+        }
+        alert(`Done! ${slots.length} slots created.`);
+        slotDates=[]; renderSlotDateTags(); updateSlotPreview();
+        ['sl-start','sl-end','sl-dur','sl-brk'].forEach(id=>{const e=$(id);if(e)e.value='';});
+        loadSlots();
+    }catch(e){ alert('Error: '+e.message); }
+    finally{ btn.disabled=false; btn.textContent='⚡ Generate Slots'; }
+}
+
+function addSlot(){
+    const date=v('sl1-date'),start=v('sl1-start'),dur=parseInt(v('sl1-dur')||'0'),brk=parseInt(v('sl1-brk')||'0'),label=v('sl1-label');
+    if(!date||!start||!dur){alert('Date, start time and duration are required.');return;}
+    if(!selTId){alert('No tournament selected');return;}
+    const endTime=m2t(t2m(start)+dur);
+    const breakEndTime=brk>0?m2t(t2m(start)+dur+brk):null;
+    db.collection('matchSlots').add({
+        tournamentId:selTId, date, startTime:start, durationMins:dur, breakMins:brk,
+        endTime, breakEndTime, label:label||'', createdAt:new Date()
+    }).then(()=>{
+        ['sl1-date','sl1-start','sl1-dur','sl1-brk','sl1-label'].forEach(id=>$(id).value='');
+        loadSlots();
+    });
+}
+
+function delSlot(id){
+    if(!confirm('Remove this slot?')) return;
+    db.collection('matchSlots').doc(id).delete().then(loadSlots);
+}
+
+function loadSlots(){
+    if(!selTId) return;
+    db.collection('matchSlots').where('tournamentId','==',selTId).get().then(snap=>{
+        const docs=[...snap.docs].sort((a,b)=>(a.data().date+a.data().startTime).localeCompare(b.data().date+b.data().startTime));
+        const sc=$('slot-count'); if(sc) sc.textContent=docs.length?`(${docs.length} slots)`:'';
+        $('slots-list').innerHTML=docs.length===0?'<p class="empty">No slots yet.</p>':docs.map(d=>{
+            const s=d.data();
+            const brk=s.breakMins>0?` + ${s.breakMins}m break → free at ${s.breakEndTime}`:'';
+            return`<div class="slot-def">
+                <div style="flex:1">
+                    <div class="sd">📅 ${s.date} &nbsp; 🕐 ${s.startTime} – ${s.endTime} &nbsp; ⏱ ${s.durationMins}m${brk}</div>
+                    ${s.label?`<div class="ss">${esc(s.label)}</div>`:''}
+                </div>
+                <button class="bsm br" onclick="delSlot('${d.id}')">Remove</button>
+            </div>`;
+        }).join('');
+    }).catch(e=>{ $('slots-list').innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`; });
+}
+
+// ── Booking View ──────────────────────────────────────────────────────────────
+let allTeamsList=[];  // cached for dropdowns
+
+async function loadBookingView(){
+    if(!selTId){ $('booking-view').innerHTML='<p class="empty">No tournament selected.</p>'; return; }
+    $('booking-view').innerHTML='<p class="empty">Loading…</p>';
+
+    let slotsSnap,availSnap,matchedSnap,teamsSnap;
+    try{
+        [slotsSnap,availSnap,matchedSnap,teamsSnap]=await Promise.all([
+            db.collection('matchSlots').where('tournamentId','==',selTId).get(),
+            db.collection('teamSlotAvail').where('tournamentId','==',selTId).get(),
+            db.collection('matches').where('tournamentId','==',selTId).get(),
+            db.collection('teams').where('tournamentId','==',selTId).get()
+        ]);
+    }catch(e){ $('booking-view').innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`; return; }
+
+    // cache teams + populate custom-match dropdowns
+    allTeamsList=teamsSnap.docs.map(d=>({id:d.id,...d.data()}));
+    populateCustomMatchDropdowns();
+
+    if(slotsSnap.empty){ $('booking-view').innerHTML='<p class="empty">No slots defined yet. Add them in the Slots tab first.</p>'; return; }
+
+    const sortedSlots=[...slotsSnap.docs].sort((a,b)=>(a.data().date+a.data().startTime).localeCompare(b.data().date+b.data().startTime));
+    const availBySlot={};
+    availSnap.docs.forEach(d=>{
+        const a=d.data();
+        (a.slotIds||[]).forEach(sid=>{ (availBySlot[sid]=availBySlot[sid]||[]).push({teamId:a.teamId,teamName:a.teamName}); });
+    });
+    const bookedSlots=new Set(matchedSnap.docs.map(d=>d.data().slotId).filter(Boolean));
+
+    // all teams opts for dropdowns in each slot
+    const allTeamOpts=allTeamsList.map(t=>`<option value="${esc(t.id)}|${esc(t.name)}">${esc(t.name)}</option>`).join('');
+
+    $('booking-view').innerHTML=sortedSlots.map(d=>{
+        const s=d.data(), sid=d.id;
+        const availTeams=availBySlot[sid]||[];
+        const booked=bookedSlots.has(sid);
+        const brk=s.breakMins>0?` → break until ${s.breakEndTime}`:'';
+        const availTags=availTeams.length
+            ?availTeams.map(t=>`<span class="avail-team">👥 ${esc(t.teamName)}</span>`).join('')
+            :'<span style="color:#bbb;font-size:.81em">No teams selected this slot</span>';
+
+        return`<div class="book-slot">
+            <div class="bsh">
+                <div>📅 ${s.date} &nbsp; 🕐 ${s.startTime}–${s.endTime} &nbsp; ⏱ ${s.durationMins}m${brk}
+                    ${s.label?`<span style="background:#c5cae9;color:#3949ab;padding:2px 8px;border-radius:10px;font-size:.76em;margin-left:6px">${esc(s.label)}</span>`:''}
+                </div>
+                ${booked?'<span style="background:#d5f5e3;color:#1e8449;padding:3px 10px;border-radius:10px;font-size:.78em;font-weight:700">✅ Booked</span>':'<span style="background:#fff3cd;color:#856404;padding:3px 10px;border-radius:10px;font-size:.78em;font-weight:600">Free</span>'}
+            </div>
+            <div class="bsb">
+                <div style="margin-bottom:9px"><strong style="font-size:.79em;color:#777">Available:</strong> ${availTags}</div>
+                ${!booked?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+                    <div style="flex:1;min-width:130px"><div class="lbl">Team 1</div><select id="bt1-${sid}" style="margin:0"><option value="">-- Any team --</option>${allTeamOpts}</select></div>
+                    <div style="flex:1;min-width:130px"><div class="lbl">Team 2</div><select id="bt2-${sid}" style="margin:0"><option value="">-- Any team --</option>${allTeamOpts}</select></div>
+                    <div style="flex:1;min-width:110px"><div class="lbl">Venue</div><input id="bv-${sid}" placeholder="Venue *" style="margin:0"/></div>
+                    <button class="bg" style="margin:0;white-space:nowrap" onclick="bookMatch('${sid}')">📅 Book</button>
+                </div>`:'<p style="color:#27ae60;font-size:.83em;margin:0">Match already scheduled for this slot.</p>'}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function populateCustomMatchDropdowns(){
+    const opts='<option value="">-- Select team --</option>'+allTeamsList.map(t=>`<option value="${esc(t.id)}|${esc(t.name)}">${esc(t.name)}</option>`).join('');
+    const t1=$('cm-t1'), t2=$('cm-t2');
+    if(t1) t1.innerHTML=opts;
+    if(t2) t2.innerHTML=opts;
+}
+
+function bookMatch(slotId){
+    const t1raw=document.getElementById('bt1-'+slotId)?.value;
+    const t2raw=document.getElementById('bt2-'+slotId)?.value;
+    const venue=(document.getElementById('bv-'+slotId)?.value||'').trim();
+    if(!t1raw||!t2raw||!venue){alert('Select both teams and enter venue.');return;}
+    if(t1raw===t2raw){alert('Teams must differ.');return;}
+    const [t1id,t1name]=t1raw.split('|');
+    const [t2id,t2name]=t2raw.split('|');
+    db.collection('matchSlots').doc(slotId).get().then(sdoc=>{
+        const s=sdoc.data();
+        db.collection('matches').add({
+            tournamentId:selTId, slotId,
+            team1:t1name, team2:t2name, team1Id:t1id, team2Id:t2id,
+            date:s.date, startTime:s.startTime, endTime:s.endTime,
+            durationMins:s.durationMins, breakMins:s.breakMins||0,
+            breakEndTime:s.breakEndTime||null, venue, createdAt:new Date()
+        }).then(()=>{ loadBookingView(); loadMatches(); });
+    });
+}
+
+function bookCustomMatch(){
+    const date=v('cm-date'), start=v('cm-start'), dur=parseInt(v('cm-dur')||'0');
+    const brk=parseInt(v('cm-brk')||'0'), venue=v('cm-venue');
+    const t1raw=v('cm-t1'), t2raw=v('cm-t2');
+    if(!date||!start||!dur){alert('Date, start time and duration are required.');return;}
+    if(!t1raw||!t2raw){alert('Select both teams.');return;}
+    if(!venue){alert('Venue is required.');return;}
+    if(t1raw===t2raw){alert('Teams must differ.');return;}
+    const [t1id,t1name]=t1raw.split('|');
+    const [t2id,t2name]=t2raw.split('|');
+    const endTime=m2t(t2m(start)+dur);
+    const breakEndTime=brk>0?m2t(t2m(start)+dur+brk):null;
+    db.collection('matches').add({
+        tournamentId:selTId, slotId:null,
+        team1:t1name, team2:t2name, team1Id:t1id, team2Id:t2id,
+        date, startTime:start, endTime, durationMins:dur,
+        breakMins:brk, breakEndTime, venue, createdAt:new Date()
+    }).then(()=>{
+        ['cm-date','cm-start','cm-dur','cm-brk','cm-venue'].forEach(id=>{const e=$(id);if(e)e.value='';});
+        $('cm-t1').selectedIndex=0; $('cm-t2').selectedIndex=0;
+        document.getElementById('custom-book-details').open=false;
+        loadMatches(); alert('Match scheduled!');
+    }).catch(e=>alert('Error: '+e.message));
+}
+
+function loadMatches(){
+    if(!selTId) return;
+    db.collection('matches').where('tournamentId','==',selTId).get().then(snap=>{
+        const docs=[...snap.docs].sort((a,b)=>(a.data().date+a.data().startTime).localeCompare(b.data().date+b.data().startTime));
+        if(!docs.length){ $('matches-list').innerHTML='<p class="empty">No matches yet.</p>'; return; }
+        $('matches-list').innerHTML=`
+        <div class="tbl-wrap">
+        <table class="mtbl">
+            <thead><tr>
+                <th>#</th><th>Date</th><th>Start</th><th>End</th><th>Dur</th><th>Match</th><th>Venue</th><th>Break</th><th></th>
+            </tr></thead>
+            <tbody>${docs.map((d,i)=>{
+                const m=d.data();
+                const breakCell=m.breakMins>0?`${m.breakMins}m → ${m.breakEndTime}`:'—';
+                const customTag=!m.slotId?'<span style="background:#fff3cd;color:#856404;font-size:.73em;padding:1px 6px;border-radius:8px;margin-left:4px">custom</span>':'';
+                return`<tr>
+                    <td style="color:#aaa;font-size:.8em">${i+1}</td>
+                    <td style="white-space:nowrap">${m.date}</td>
+                    <td>${m.startTime}</td>
+                    <td>${m.endTime}</td>
+                    <td>${m.durationMins}m</td>
+                    <td class="vs-badge">${esc(m.team1)} <span style="color:#667eea">vs</span> ${esc(m.team2)}${customTag}</td>
+                    <td>${esc(m.venue)}</td>
+                    <td style="color:#e67e22;white-space:nowrap">${breakCell}</td>
+                    <td><button class="bsm br" onclick="delMatch('${d.id}')">Cancel</button></td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>
+        </div>`;
+    }).catch(e=>{ $('matches-list').innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`; });
+}
+
+function delMatch(id){ if(!confirm('Cancel this match?')) return; db.collection('matches').doc(id).delete().then(()=>{ loadMatches(); loadBookingView(); }); }
+
+// ── Captain: pick slots ───────────────────────────────────────────────────────
+async function loadCapSlots(){
+    if(!capTeam?.tournamentId){ $('cap-slots').innerHTML='<p class="empty">No tournament found for your team.</p>'; return; }
+    $('cap-slots').innerHTML='<p class="empty">Loading…</p>';
+
+    let slotsSnap,myAvailDoc;
+    try{
+        [slotsSnap,myAvailDoc]=await Promise.all([
+            db.collection('matchSlots').where('tournamentId','==',capTeam.tournamentId).get(),
+            db.collection('teamSlotAvail').where('teamId','==',capTeam.id).where('tournamentId','==',capTeam.tournamentId).limit(1).get()
+        ]);
+    }catch(e){ $('cap-slots').innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`; return; }
+
+    if(slotsSnap.empty){ $('cap-slots').innerHTML='<p class="empty">No slots defined yet — your organizer hasn\'t added them.</p>'; return; }
+
+    const sorted=[...slotsSnap.docs].sort((a,b)=>(a.data().date+a.data().startTime).localeCompare(b.data().date+b.data().startTime));
+    const mySlotIds=myAvailDoc.empty?[]:myAvailDoc.docs[0].data().slotIds||[];
+
+    $('cap-slots').innerHTML=sorted.map(d=>{
+        const s=d.data(), sid=d.id;
+        const checked=mySlotIds.includes(sid)?'checked':'';
+        const brk=s.breakMins>0?` + ${s.breakMins}m break → free at ${s.breakEndTime}`:'';
+        return`<div class="slot-pick">
+            <div class="sp-h">
+                <input type="checkbox" id="chk-${sid}" ${checked}/>
+                <label for="chk-${sid}">📅 ${s.date} &nbsp; 🕐 ${s.startTime} – ${s.endTime} &nbsp; ⏱ ${s.durationMins}m${brk}</label>
+            </div>
+            ${s.label?`<div class="sp-b">${esc(s.label)}</div>`:''}
+        </div>`;
+    }).join('');
+    show('cap-save-btn');
+    selTId=capTeam.tournamentId;
+}
+
+async function saveCapSlots(){
+    const allChkIds=[...document.querySelectorAll('[id^="chk-"]')].map(el=>el.id.replace('chk-',''));
+    const selected=allChkIds.filter(sid=>document.getElementById('chk-'+sid)?.checked);
+    if(!selected.length&&!confirm('You haven\'t selected any slots. Save anyway?')) return;
+    const existing=await db.collection('teamSlotAvail')
+        .where('teamId','==',capTeam.id).where('tournamentId','==',capTeam.tournamentId).limit(1).get();
+    const payload={teamId:capTeam.id,teamName:capTeam.name,tournamentId:capTeam.tournamentId,captainEmail:me.email,slotIds:selected,updatedAt:new Date()};
+    if(existing.empty){ await db.collection('teamSlotAvail').add({...payload,createdAt:new Date()}); }
+    else { await existing.docs[0].ref.set(payload,{merge:true}); }
+    alert(`Saved! ${selected.length} slot${selected.length!==1?'s':''} selected.`);
+}
+
+// ── Captain: player availability ──────────────────────────────────────────────
+async function loadCapPlayerAvail(){
+    const date=$('cap-date').value;
+    const el=$('cap-player-avail');
+    if(!date){ el.innerHTML='<p class="empty">Select a date.</p>'; return; }
+    el.innerHTML='<p class="empty">Loading…</p>';
+    let usersSnap,busySnap;
+    try{
+        [usersSnap,busySnap]=await Promise.all([
+            db.collection('users').where('role','==','player').get(),
+            db.collection('busySlots').where('date','==',date).get()
+        ]);
+    }catch(e){ el.innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`; return; }
+
+    const players=usersSnap.docs.map(d=>d.data());
+    if(!players.length){ el.innerHTML='<p class="empty">No players registered yet.</p>'; return; }
+    const busyByP={};
+    busySnap.docs.forEach(d=>{ const b=d.data(); (busyByP[b.email]=busyByP[b.email]||[]).push(b); });
+    busyByP && Object.values(busyByP).forEach(arr=>arr.sort((a,b)=>a.from.localeCompare(b.from)));
+
+    el.innerHTML=players.map(p=>{
+        const busy=busyByP[p.email]||[];
+        const tag=busy.length===0?'<span class="ftag">✅ Fully Free</span>':'<span class="btag">⚠️ Has Busy Blocks</span>';
+        const rows=busy.length
+            ?busy.map(b=>`<div class="brow"><span class="bt">🚫 ${b.from} – ${b.to}</span><span class="br2">${b.reason?esc(b.reason):''}</span></div>`).join('')
+            :'<span style="color:#27ae60;font-size:.85em">No blocks — available all day 🎉</span>';
+        return`<div class="pcard"><div class="ph"><span>👤 <strong>${esc(p.name||p.email)}</strong> <small style="color:#888;font-weight:400">${esc(p.email)}</small></span>${tag}</div><div class="pb">${rows}</div></div>`;
+    }).join('');
+}
+
+// ── Player: busy blocks ───────────────────────────────────────────────────────
+function saveBusy(){
+    const date=v('b-date'),from=v('b-from'),to=v('b-to'),reason=v('b-reason');
+    if(!date||!from||!to){alert('Date and both times required');return;}
+    if(from>=to){alert('"From" must be before "until"');return;}
+    db.collection('busySlots').add({email:me.email,name:me.displayName,date,from,to,reason,createdAt:new Date()}).then(()=>{
+        ['b-date','b-from','b-to','b-reason'].forEach(id=>$(id).value=''); loadMyBusy();
+    });
+}
+
+function delBusy(id){ db.collection('busySlots').doc(id).delete().then(loadMyBusy); }
+
+function loadMyBusy(){
+    db.collection('busySlots').where('email','==',me.email).get().then(snap=>{
+        const el=$('my-busy');
+        if(snap.empty){ el.innerHTML='<p class="empty">Nothing blocked — you\'re free! 🎉</p>'; return; }
+        const byDate={};
+        snap.docs.forEach(d=>{ const b=d.data(); (byDate[b.date]=byDate[b.date]||[]).push({...b,id:d.id}); });
+        // sort dates, and within each date sort by from time
+        const sortedDates=Object.keys(byDate).sort();
+        sortedDates.forEach(dt=>byDate[dt].sort((a,b)=>a.from.localeCompare(b.from)));
+        el.innerHTML=sortedDates.map(date=>{
+            const bs=byDate[date];
+            return`<div style="margin-bottom:11px"><div style="font-weight:600;color:#555;margin-bottom:3px">📅 ${date}</div>
+            ${bs.map(b=>`<div class="brow"><div><span class="bt">🚫 ${b.from} – ${b.to}</span>${b.reason?` <span class="br2">· ${esc(b.reason)}</span>`:''}</div>
+            <button class="bsm br" onclick="delBusy('${b.id}')">Remove</button></div>`).join('')}</div>`;
+        }).join('');
+    }).catch(e=>{ $('my-busy').innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`; });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function v(id){ return (document.getElementById(id)?.value||'').trim(); }
+function $(id){ return document.getElementById(id); }
+function show(id){ const e=$(id); if(e) e.style.display='block'; }
+function hide(id){ const e=$(id); if(e) e.style.display='none'; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function today(){ return new Date().toISOString().slice(0,10); }
+</script>
+</body>
+</html>
