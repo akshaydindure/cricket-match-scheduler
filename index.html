@@ -366,7 +366,12 @@
                             <span class="band-lbl">= after afternoon</span>
                         </div>
                         <div class="band-row" style="border:none;padding-top:10px">
-                            <span class="band-lbl">Max slots a captain can pick (quota)</span>
+                            <span class="band-lbl">Matches per team</span>
+                            <input type="number" id="band-matches" style="width:80px;margin:0" placeholder="e.g. 4" min="1"/>
+                            <span style="font-size:.8em;color:#aaa">slots divided into this many bands (e.g. 4 matches = 4 bands)</span>
+                        </div>
+                        <div class="band-row" style="border:none">
+                            <span class="band-lbl">Max slots captain can pick (quota)</span>
                             <input type="number" id="band-quota" style="width:80px;margin:0" placeholder="e.g. 4" min="1"/>
                             <span style="font-size:.8em;color:#aaa">0 = no limit</span>
                         </div>
@@ -1087,7 +1092,8 @@ async function loadCapSlots(){
     capBandConfig={
         morningEnd:td.bandMorningEnd||'12:00',
         afternoonEnd:td.bandAfternoonEnd||'17:00',
-        quota:td.slotQuota||0
+        quota:td.slotQuota||0,
+        matchesPerTeam:td.matchesPerTeam||0
     };
     const ruleBox=$('cap-band-rules');
 
@@ -1096,15 +1102,17 @@ async function loadCapSlots(){
     const sorted=[...slotsSnap.docs].sort((a,b)=>(a.data().date+a.data().startTime).localeCompare(b.data().date+b.data().startTime));
     const mySlotIds=myAvailDoc.empty?[]:myAvailDoc.docs[0].data().slotIds||[];
 
-    // compute unique start times across all slots → 4 quartile bands
+    // compute unique start times → divide into N bands (matchesPerTeam, default 4)
     const uniqueTimes=[...new Set(sorted.map(d=>d.data().startTime))].sort();
-    const numBands=Math.min(4,uniqueTimes.length);
+    const numBands=capBandConfig.matchesPerTeam>0
+        ? Math.min(capBandConfig.matchesPerTeam, uniqueTimes.length)
+        : Math.min(4, uniqueTimes.length);
 
     if(ruleBox){
         const qTxt=capBandConfig.quota>0?` · Max <strong>${capBandConfig.quota}</strong> slots total`:'';
-        const bandChips=[...Array(numBands)].map((_,i)=>BAND_LABELS[i].chip).join(' ');
+        const bandChips=[...Array(numBands)].map((_,i)=>`<span class="band-pill" style="background:${BAND_BG[i%4]};color:${BAND_COLORS[i%4]}">Q${i+1}</span>`).join(' ');
         ruleBox.style.display='block';
-        ruleBox.innerHTML=`⚖️ <strong>Fairness rules:</strong> Pick at least 1 slot from each time quarter${qTxt}.<br>${bandChips}`;
+        ruleBox.innerHTML=`⚖️ <strong>Fairness rules:</strong> Pick at least 1 slot from each of the ${numBands} time bands${qTxt}.<br><div style="margin-top:5px">${bandChips}</div>`;
     }
 
     // group by date
@@ -1121,8 +1129,8 @@ async function loadCapSlots(){
                 const brk=s.breakMins>0?` + ${s.breakMins}m break`:'';
                 return`<div class="slot-pick">
                     <div class="sp-h">
-                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" data-band="${getBandIndex(s.startTime,uniqueTimes)}" ${checked}/>
-                        <label for="chk-${sid}">${getBandChip(s.startTime,uniqueTimes)} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
+                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" data-band="${getBandIndex(s.startTime,uniqueTimes,numBands)}" ${checked}/>
+                        <label for="chk-${sid}">${getBandChip(s.startTime,uniqueTimes,numBands)} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
                     </div>
                     ${s.label?`<div class="sp-b">${esc(s.label)}</div>`:''}
                 </div>`;
@@ -1341,9 +1349,10 @@ async function saveBandConfig(){
     if(!selTId){alert('No tournament selected.');return;}
     const morningEnd=v('band-morning-end'), afternoonEnd=v('band-afternoon-end');
     const quota=parseInt(v('band-quota')||'0');
+    const matchesPerTeam=parseInt(v('band-matches')||'0');
     if(!morningEnd||!afternoonEnd){alert('Set both morning and afternoon end times.');return;}
     if(morningEnd>=afternoonEnd){alert('Morning must end before afternoon.');return;}
-    await db.collection('tournaments').doc(selTId).update({bandMorningEnd:morningEnd,bandAfternoonEnd:afternoonEnd,slotQuota:quota});
+    await db.collection('tournaments').doc(selTId).update({bandMorningEnd:morningEnd,bandAfternoonEnd:afternoonEnd,slotQuota:quota,matchesPerTeam:matchesPerTeam||0});
     const s=$('band-save-status'); if(s){s.textContent='Saved!';setTimeout(()=>s.textContent='',3000);}
 }
 
@@ -1355,6 +1364,7 @@ async function loadBandConfig(){
     if(t.bandMorningEnd){const e=$('band-morning-end');if(e)e.value=t.bandMorningEnd;}
     if(t.bandAfternoonEnd){const e=$('band-afternoon-end');if(e)e.value=t.bandAfternoonEnd;}
     if(t.slotQuota!==undefined){const e=$('band-quota');if(e)e.value=t.slotQuota;}
+    if(t.matchesPerTeam){const e=$('band-matches');if(e)e.value=t.matchesPerTeam;}
 }
 
 // ── Band helpers (4-quarter system) ──────────────────────────────────────────
@@ -1367,15 +1377,16 @@ const BAND_LABELS=[
 const BAND_COLORS=['#1565c0','#2e7d32','#f57f17','#c62828'];
 const BAND_BG=['#e3f2fd','#e8f5e9','#fff8e1','#fce4ec'];
 
-function getBandIndex(startTime, uniqueTimes){
+function getBandIndex(startTime, uniqueTimes, numBands){
+    const n=numBands||4;
     const idx=uniqueTimes.indexOf(startTime);
     if(idx<0||!uniqueTimes.length) return 0;
-    return Math.min(3, Math.floor(idx*4/uniqueTimes.length));
+    return Math.min(n-1, Math.floor(idx*n/uniqueTimes.length));
 }
 
-function getBandChip(startTime, uniqueTimes){
-    const b=getBandIndex(startTime,uniqueTimes);
-    return`<span class="band-pill" style="background:${BAND_BG[b]};color:${BAND_COLORS[b]};margin-right:5px">Q${b+1}</span>`;
+function getBandChip(startTime, uniqueTimes, numBands){
+    const b=getBandIndex(startTime,uniqueTimes,numBands);
+    return`<span class="band-pill" style="background:${BAND_BG[b%4]};color:${BAND_COLORS[b%4]};margin-right:5px">Q${b+1}</span>`;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
