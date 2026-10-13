@@ -1102,11 +1102,14 @@ async function loadCapSlots(){
     const sorted=[...slotsSnap.docs].sort((a,b)=>(a.data().date+a.data().startTime).localeCompare(b.data().date+b.data().startTime));
     const mySlotIds=myAvailDoc.empty?[]:myAvailDoc.docs[0].data().slotIds||[];
 
-    // compute unique start times → divide into N bands (matchesPerTeam, default 4)
-    const uniqueTimes=[...new Set(sorted.map(d=>d.data().startTime))].sort();
+    // divide ALL slots (across all dates) into N bands = matchesPerTeam
+    // this handles cases where matches per team > slots per day
+    const allSortedKeys=sorted.map(d=>d.data().date+'|'+d.data().startTime); // sorted list of all slot keys
     const numBands=capBandConfig.matchesPerTeam>0
-        ? Math.min(capBandConfig.matchesPerTeam, uniqueTimes.length)
-        : Math.min(4, uniqueTimes.length);
+        ? Math.min(capBandConfig.matchesPerTeam, allSortedKeys.length)
+        : Math.min(4, allSortedKeys.length);
+    // for the chip label we still use unique times per day for display
+    const uniqueTimes=[...new Set(sorted.map(d=>d.data().startTime))].sort();
 
     if(ruleBox){
         const qTxt=capBandConfig.quota>0?` · Max <strong>${capBandConfig.quota}</strong> slots total`:'';
@@ -1129,8 +1132,8 @@ async function loadCapSlots(){
                 const brk=s.breakMins>0?` + ${s.breakMins}m break`:'';
                 return`<div class="slot-pick">
                     <div class="sp-h">
-                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" data-band="${getBandIndex(s.startTime,uniqueTimes,numBands)}" ${checked}/>
-                        <label for="chk-${sid}">${getBandChip(s.startTime,uniqueTimes,numBands)} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
+                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" data-band="${getBandIndexByPos(allSortedKeys.indexOf(s.date+'|'+s.startTime),allSortedKeys.length,numBands)}" ${checked}/>
+                        <label for="chk-${sid}">${getBandChipByPos(allSortedKeys.indexOf(s.date+'|'+s.startTime),allSortedKeys.length,numBands)} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
                     </div>
                     ${s.label?`<div class="sp-b">${esc(s.label)}</div>`:''}
                 </div>`;
@@ -1377,6 +1380,14 @@ const BAND_LABELS=[
 const BAND_COLORS=['#1565c0','#2e7d32','#f57f17','#c62828'];
 const BAND_BG=['#e3f2fd','#e8f5e9','#fff8e1','#fce4ec'];
 
+function getBandIndexByPos(pos, total, numBands){
+    if(pos<0||!total) return 0;
+    return Math.min(numBands-1, Math.floor(pos*numBands/total));
+}
+function getBandChipByPos(pos, total, numBands){
+    const b=getBandIndexByPos(pos,total,numBands);
+    return`<span class="band-pill" style="background:${BAND_BG[b%4]};color:${BAND_COLORS[b%4]};margin-right:5px">Q${b+1}</span>`;
+}
 function getBandIndex(startTime, uniqueTimes, numBands){
     const n=numBands||4;
     const idx=uniqueTimes.indexOf(startTime);
