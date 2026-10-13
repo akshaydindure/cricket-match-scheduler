@@ -1082,16 +1082,20 @@ async function loadCapSlots(){
         ]);
     }catch(e){ $('cap-slots').innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`; return; }
 
-    // load band rules
+    // load band rules — default to 12:00/17:00 if organizer hasn't configured
     const td=tDoc.exists?tDoc.data():{};
-    capBandConfig=td.bandMorningEnd?{morningEnd:td.bandMorningEnd,afternoonEnd:td.bandAfternoonEnd,quota:td.slotQuota||0}:null;
+    capBandConfig={
+        morningEnd:td.bandMorningEnd||'12:00',
+        afternoonEnd:td.bandAfternoonEnd||'17:00',
+        quota:td.slotQuota||0
+    };
     const ruleBox=$('cap-band-rules');
-    if(capBandConfig&&ruleBox){
+    if(ruleBox){
         ruleBox.style.display='block';
         const qTxt=capBandConfig.quota>0?` · Max <strong>${capBandConfig.quota}</strong> slots total`:'';
-        ruleBox.innerHTML=`⚖️ <strong>Fairness rules apply:</strong> You must pick at least 1 slot from each time band across all dates${qTxt}.<br>
+        ruleBox.innerHTML=`⚖️ <strong>Fairness rules:</strong> You must pick at least 1 slot from each time band across all tournament dates${qTxt}.<br>
         🌅 Morning = before ${capBandConfig.morningEnd} &nbsp;|&nbsp; ☀️ Afternoon = ${capBandConfig.morningEnd}–${capBandConfig.afternoonEnd} &nbsp;|&nbsp; 🌆 Evening = after ${capBandConfig.afternoonEnd}`;
-    } else if(ruleBox){ ruleBox.style.display='none'; }
+    }
 
     if(slotsSnap.empty){ $('cap-slots').innerHTML='<p class="empty">No slots defined yet — your organizer hasn\'t added them.</p>'; return; }
 
@@ -1112,7 +1116,7 @@ async function loadCapSlots(){
                 const brk=s.breakMins>0?` + ${s.breakMins}m break`:'';
                 return`<div class="slot-pick">
                     <div class="sp-h">
-                        <input type="checkbox" id="chk-${sid}" ${checked}/>
+                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" ${checked}/>
                         <label for="chk-${sid}">${band?`<span class="band-pill ${band.cls}" style="margin-right:6px">${band.icon}</span>`:''} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
                     </div>
                     ${s.label?`<div class="sp-b">${esc(s.label)}</div>`:''}
@@ -1140,15 +1144,11 @@ async function saveCapSlots(){
         const quota=capBandConfig.quota;
         if(quota>0&&selected.length>quota){alert(`You can only select up to ${quota} slots. You have ${selected.length} selected.`);return;}
 
-        // get start times for selected slots
-        const allSlotEls=document.querySelectorAll('[id^="chk-"]');
-        const selectedStartTimes=[];
-        allSlotEls.forEach(el=>{
-            if(!el.checked) return;
-            const label=el.closest('.slot-pick')?.querySelector('label')?.textContent||'';
-            const m=label.match(/(\d{2}:\d{2})\s*–/);
-            if(m) selectedStartTimes.push(m[1]);
-        });
+        // get start times for selected slots via data attribute
+        const selectedStartTimes=[...document.querySelectorAll('[id^="chk-"]')]
+            .filter(el=>el.checked)
+            .map(el=>el.getAttribute('data-start'))
+            .filter(Boolean);
         const hasMorning=selectedStartTimes.some(t=>t<capBandConfig.morningEnd);
         const hasAfternoon=selectedStartTimes.some(t=>t>=capBandConfig.morningEnd&&t<capBandConfig.afternoonEnd);
         const hasEvening=selectedStartTimes.some(t=>t>=capBandConfig.afternoonEnd);
