@@ -1141,18 +1141,25 @@ async function loadCapSlots(){
     const byDate={};
     sorted.forEach(d=>{const dt=d.data().date;(byDate[dt]=byDate[dt]||[]).push(d);});
 
-    $('cap-slots').innerHTML=Object.entries(byDate).map(([date,sdocs])=>{
+    // store band config in a hidden element so saveCapSlots can read it
+    $('cap-slots').innerHTML=
+        `<div id="band-meta" style="display:none"
+            data-num="${numBands}"
+            data-required="${requiredBands}"
+            data-times="${uniqueTimes.join(',')}"
+            data-disabled="${capBandConfig.disabled?'1':'0'}"></div>`
+        +Object.entries(byDate).map(([date,sdocs])=>{
         return`<div style="margin-bottom:12px">
             <div style="font-weight:700;color:#555;margin-bottom:4px">📅 ${date}</div>
             ${sdocs.map(d=>{
                 const s=d.data(), sid=d.id;
                 const checked=mySlotIds.includes(sid)?'checked':'';
-                const band=capBandConfig?getBandLabel(s.startTime,capBandConfig):'';
+                const bandIdx=numBands?getBandIndex(s.startTime,uniqueTimes,numBands):-1;
                 const brk=s.breakMins>0?` + ${s.breakMins}m break`:'';
                 return`<div class="slot-pick">
                     <div class="sp-h">
-                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" ${numBands?`data-band="${getBandIndex(s.startTime,uniqueTimes,numBands)}"`:''}  ${checked}/>
-                        <label for="chk-${sid}">${numBands?getBandChip(s.startTime,uniqueTimes,numBands):''} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
+                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" data-band="${bandIdx}" ${checked}/>
+                        <label for="chk-${sid}">${numBands&&bandIdx>=0?getBandChip(s.startTime,uniqueTimes,numBands):''} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
                     </div>
                     ${s.label?`<div class="sp-b">${esc(s.label)}</div>`:''}
                 </div>`;
@@ -1174,22 +1181,34 @@ async function saveCapSlots(){
     const allChkIds=[...document.querySelectorAll('[id^="chk-"]')].map(el=>el.id.replace('chk-',''));
     const selected=allChkIds.filter(sid=>document.getElementById('chk-'+sid)?.checked);
 
+    // read band config from DOM (set at render time, independent of capBandConfig variable)
+    const bandMeta=document.getElementById('band-meta');
+    const bmDisabled=bandMeta&&bandMeta.dataset.disabled==='1';
+    const bmNum=bandMeta?parseInt(bandMeta.dataset.num||'0',10):0;
+    const bmRequired=bandMeta?parseInt(bandMeta.dataset.required||'0',10):0;
+    const bmTimes=bandMeta&&bandMeta.dataset.times?bandMeta.dataset.times.split(',').filter(Boolean):[];
+
     // quota enforcement
-    if(capBandConfig&&capBandConfig.quota>0&&selected.length>capBandConfig.quota){
-        alert(`You can only select up to ${capBandConfig.quota} slots. You have ${selected.length} selected.`);return;
+    const quota=capBandConfig&&capBandConfig.quota>0?capBandConfig.quota:0;
+    if(quota>0&&selected.length>quota){
+        alert(`You can only select up to ${quota} slots. You have ${selected.length} selected.`);return;
     }
-    // band enforcement
-    if(capBandConfig&&!capBandConfig.disabled){
+    // band enforcement — recompute fresh from data-start attributes
+    if(bandMeta&&!bmDisabled&&bmNum>0&&bmTimes.length>0){
         const allChks=[...document.querySelectorAll('[id^="chk-"]')];
-        const bandsPresent=new Set(allChks.map(el=>el.getAttribute('data-band')).filter(b=>b!==null&&b!==''));
+        // recompute band for every checkbox from its data-start and the stored uniqueTimes
+        const getBand=t=>{
+            const idx=bmTimes.indexOf(t);
+            if(idx<0) return -1;
+            return Math.min(bmNum-1, Math.floor(idx*bmNum/bmTimes.length));
+        };
+        const bandsPresent=new Set(allChks.map(el=>getBand(el.dataset.start)).filter(b=>b>=0).map(String));
         if(bandsPresent.size>0){
-            const bandsSelected=new Set(allChks.filter(el=>el.checked).map(el=>el.getAttribute('data-band')).filter(Boolean));
-            const numRequired=capBandConfig.requiredBands>0
-                ? Math.min(capBandConfig.requiredBands, bandsPresent.size)
-                : bandsPresent.size;
+            const bandsSelected=new Set(allChks.filter(el=>el.checked).map(el=>getBand(el.dataset.start)).filter(b=>b>=0).map(String));
+            const numRequired=bmRequired>0?Math.min(bmRequired,bandsPresent.size):bandsPresent.size;
             if(bandsSelected.size<numRequired){
                 const missing=[...bandsPresent].sort((a,b)=>+a-+b).filter(b=>!bandsSelected.has(b)).slice(0,numRequired-bandsSelected.size).map(b=>'Q'+(+b+1));
-                alert(`Fairness rule: pick at least 1 slot from ${numRequired} of the ${bandsPresent.size} time bands.\n\nStill need: ${missing.join(', ')}`);
+                alert(`Fairness rule: pick at least 1 slot from each of ${numRequired} time band${numRequired!==1?'s':''}.\n\nStill need: ${missing.join(', ')}`);
                 return;
             }
         }
