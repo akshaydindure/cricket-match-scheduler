@@ -126,6 +126,27 @@
         .mtbl tr:hover td{background:#fafbff}
         .vs-badge{font-weight:700;color:#333}
         .tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid #e8eaf6}
+
+        /* fixtures */
+        .fix-card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;margin:6px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px}
+        .fix-card.played{opacity:.55;border-left:4px solid #27ae60}
+        .fix-card.scheduled{border-left:4px solid #667eea}
+        .fix-card.pending{border-left:4px solid #f39c12}
+        .fix-vs{font-weight:700;color:#333;font-size:.93em}
+        .fix-badge{padding:2px 9px;border-radius:10px;font-size:.75em;font-weight:700}
+        .fix-badge.pending{background:#fff3cd;color:#856404}
+        .fix-badge.scheduled{background:#e8eaf6;color:#3949ab}
+        .fix-badge.played{background:#d5f5e3;color:#1e8449}
+        .grp-hdr{font-weight:700;color:#667eea;font-size:.88em;margin:12px 0 4px;padding:4px 10px;background:#f0f2ff;border-radius:6px}
+
+        /* band config */
+        .band-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f0f0f0}
+        .band-row:last-child{border-bottom:none}
+        .band-lbl{font-weight:600;font-size:.85em;color:#555;min-width:90px}
+        .band-pill{padding:3px 10px;border-radius:10px;font-size:.78em;font-weight:700}
+        .band-pill.morning{background:#fff3cd;color:#856404}
+        .band-pill.afternoon{background:#d5f5e3;color:#1e8449}
+        .band-pill.evening{background:#e8eaf6;color:#3949ab}
     </style>
 </head>
 <body>
@@ -202,6 +223,7 @@
                 <div class="tab-bar" id="manage-tab-bar">
                     <button class="tab-btn active" id="tbtn-tournaments" onclick="switchManageTab('tournaments')">🏆 Tournaments</button>
                     <button class="tab-btn" id="tbtn-teams" onclick="switchManageTab('teams')">👥 Teams</button>
+                    <button class="tab-btn" id="tbtn-fixtures" onclick="switchManageTab('fixtures')">📋 Fixtures</button>
                     <button class="tab-btn" id="tbtn-slots" onclick="switchManageTab('slots')">🗓️ Slots</button>
                     <button class="tab-btn" id="tbtn-book" onclick="switchManageTab('book')">📊 Book Match</button>
                     <button class="tab-btn" id="tbtn-matches" onclick="switchManageTab('matches')">✅ Matches</button>
@@ -216,6 +238,19 @@
                             <input id="t-org" placeholder="Organizer email (optional)"/>
                         </div>
                         <textarea id="t-desc" rows="2" placeholder="Description (optional)"></textarea>
+                        <div class="g2" style="margin-top:4px">
+                            <div>
+                                <div class="lbl">Format</div>
+                                <select id="t-format" onchange="toggleGroupFields()">
+                                    <option value="roundrobin">Round Robin (all teams play each other)</option>
+                                    <option value="groups">Group Stage</option>
+                                </select>
+                            </div>
+                            <div id="t-group-fields" style="display:none">
+                                <div class="lbl">Number of groups</div>
+                                <input type="number" id="t-ngroups" placeholder="e.g. 4" min="2"/>
+                            </div>
+                        </div>
                         <button onclick="createT()">➕ Create Tournament</button>
                     </div>
                     <div class="sec">
@@ -240,6 +275,44 @@
                         <button onclick="addTeam()">➕ Add Team</button>
                         <hr>
                         <div id="teams-list"><p class="empty">No teams yet.</p></div>
+                    </div>
+                </div>
+
+                <!-- Fixtures pane -->
+                <div id="pane-fixtures" style="display:none">
+                    <div class="sec">
+                        <div class="sec-t">📋 Generate Fixtures</div>
+                        <p style="font-size:.84em;color:#888;margin-bottom:10px">
+                            Once all teams are added, generate the full fixture list automatically based on the tournament format. For group stage, teams are split into groups evenly.
+                        </p>
+                        <button class="bg" onclick="generateFixtures()">⚡ Generate Fixtures from Teams</button>
+                        <span id="fix-gen-status" style="font-size:.83em;color:#888;margin-left:10px"></span>
+                    </div>
+
+                    <!-- Mid-tournament: add manual fixture -->
+                    <details style="margin-bottom:14px">
+                        <summary style="cursor:pointer;font-size:.86em;color:#888;padding:6px 0;user-select:none">➕ Manually add a fixture (for mid-tournament entry)</summary>
+                        <div class="sec" style="margin-top:8px">
+                            <p style="font-size:.82em;color:#888;margin-bottom:8px">Use this if the tournament is already running and you need to enter remaining fixtures by hand.</p>
+                            <div class="g3">
+                                <div><div class="lbl">Team 1</div><select id="mf-t1"><option value="">-- Select --</option></select></div>
+                                <div><div class="lbl">Team 2</div><select id="mf-t2"><option value="">-- Select --</option></select></div>
+                                <div><div class="lbl">Group (optional)</div><input id="mf-grp" placeholder="e.g. Group A"/></div>
+                            </div>
+                            <button class="bo" onclick="addManualFixture()" style="margin-top:6px">➕ Add Fixture</button>
+                        </div>
+                    </details>
+
+                    <div class="sec">
+                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+                            <div class="sec-t" style="margin:0">All Fixtures <span id="fix-count" style="font-size:.75em;font-weight:400;color:#888"></span></div>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                <span style="font-size:.78em;color:#888">Filter:</span>
+                                <button class="bsm bo" onclick="loadFixtures('pending')">Pending</button>
+                                <button class="bsm" onclick="loadFixtures('all')">All</button>
+                            </div>
+                        </div>
+                        <div id="fixtures-list"><p class="empty">No fixtures yet.</p></div>
                     </div>
                 </div>
 
@@ -270,6 +343,35 @@
 
                         <div id="sl-preview" style="font-size:.83em;color:#667eea;margin:6px 0 10px;font-weight:600"></div>
                         <button class="bg" onclick="generateSlots()" id="gen-btn">⚡ Generate Slots</button>
+                    </div>
+
+                    <!-- Band balancing config -->
+                    <div class="sec" style="margin-top:0">
+                        <div class="sec-t">⚖️ Captain Availability Rules</div>
+                        <p style="font-size:.84em;color:#888;margin-bottom:12px">
+                            Set time bands so captains must spread their availability — they must pick at least 1 slot from each band <em>across all tournament dates</em>, not per day.
+                        </p>
+                        <div class="band-row">
+                            <span class="band-pill morning">🌅 Morning</span>
+                            <span class="band-lbl">ends at</span>
+                            <input type="time" id="band-morning-end" style="width:auto;flex:1;max-width:130px;margin:0" placeholder="e.g. 12:00"/>
+                        </div>
+                        <div class="band-row">
+                            <span class="band-pill afternoon">☀️ Afternoon</span>
+                            <span class="band-lbl">ends at</span>
+                            <input type="time" id="band-afternoon-end" style="width:auto;flex:1;max-width:130px;margin:0" placeholder="e.g. 17:00"/>
+                        </div>
+                        <div class="band-row">
+                            <span class="band-pill evening">🌆 Evening</span>
+                            <span class="band-lbl">= after afternoon</span>
+                        </div>
+                        <div class="band-row" style="border:none;padding-top:10px">
+                            <span class="band-lbl">Max slots a captain can pick (quota)</span>
+                            <input type="number" id="band-quota" style="width:80px;margin:0" placeholder="e.g. 4" min="1"/>
+                            <span style="font-size:.8em;color:#aaa">0 = no limit</span>
+                        </div>
+                        <button class="bo" onclick="saveBandConfig()" style="margin-top:8px">💾 Save Rules</button>
+                        <span id="band-save-status" style="font-size:.82em;color:#27ae60;margin-left:8px"></span>
                     </div>
 
                     <!-- Manual single slot -->
@@ -334,7 +436,8 @@
 
             <!-- ═══ CAPTAIN ═══ -->
             <div id="captain-panel" style="display:none">
-                <div class="info">ℹ️ As <strong>captain</strong>, select which slots your team is available for. Your organizer will use this to book matches.</div>
+                <div class="info" id="cap-info">ℹ️ As <strong>captain</strong>, select which slots your team is available for. Your organizer will use this to book matches.</div>
+                <div id="cap-band-rules" style="display:none;background:#fff8e1;border-left:4px solid #f39c12;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:.87em;color:#7d5a00"></div>
 
                 <div class="tab-bar">
                     <button class="tab-btn active" id="ctbtn-avail" onclick="switchCapTab('avail')">🗓️ My Availability</button>
@@ -541,17 +644,17 @@ function setRole(r){ myRole=r; const b=$('u-bdg'); b.textContent=r; b.className=
 auth.onAuthStateChanged(u=>{ if(u&&u.email) boot(u); });
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
-const MANAGE_TABS=['tournaments','teams','slots','book','matches'];
+const MANAGE_TABS=['tournaments','teams','fixtures','slots','book','matches'];
 function switchManageTab(name){
     MANAGE_TABS.forEach(t=>{
         const pane=$('pane-'+t), btn=$('tbtn-'+t);
         if(pane) pane.style.display=t===name?'block':'none';
         if(btn) btn.classList.toggle('active',t===name);
     });
-    // lazy-load data when tab is first opened
     if(selTId){
         if(name==='teams') loadTeams();
-        if(name==='slots') loadSlots();
+        if(name==='fixtures'){ loadFixtures('all'); populateManualFixtureDropdowns(); }
+        if(name==='slots'){ loadSlots(); loadBandConfig(); }
         if(name==='book')  loadBookingView();
         if(name==='matches') loadMatches();
     }
@@ -567,14 +670,23 @@ function switchCapTab(name){
 }
 
 // ── Owner: Tournaments ────────────────────────────────────────────────────────
+function toggleGroupFields(){
+    const f=v('t-format');
+    const gf=$('t-group-fields');
+    if(gf) gf.style.display=f==='groups'?'block':'none';
+}
+
 function createT(){
     const name=v('t-name'), org=v('t-org').toLowerCase(), desc=v('t-desc');
+    const format=v('t-format')||'roundrobin';
+    const ngroups=format==='groups'?parseInt(v('t-ngroups')||'2'):null;
     if(!name){alert('Name required');return;}
-    const btn=document.querySelector('#pane-tournaments button');
+    if(format==='groups'&&(!ngroups||ngroups<2)){alert('Enter number of groups (min 2).');return;}
+    const btn=document.querySelector('#pane-tournaments button[onclick="createT()"]');
     btn.disabled=true; btn.textContent='Creating…';
-    db.collection('tournaments').add({name,desc,organizers:org?[org]:[],createdBy:me.email,createdAt:new Date()}).then(()=>{
+    db.collection('tournaments').add({name,desc,organizers:org?[org]:[],createdBy:me.email,format,numGroups:ngroups,status:'setup',createdAt:new Date()}).then(()=>{
         if(org) db.collection('users').doc(org).set({email:org,role:'organizer'},{merge:true});
-        ['t-name','t-org','t-desc'].forEach(id=>$(id).value='');
+        ['t-name','t-org','t-desc','t-ngroups'].forEach(id=>$(id).value='');
         loadAllT();
     }).catch(e=>alert('Failed: '+e.message))
     .finally(()=>{ btn.disabled=false; btn.textContent='➕ Create Tournament'; });
@@ -640,7 +752,7 @@ function selT(id){
     const name=$('t-sel').options[$('t-sel').selectedIndex]?.text;
     $('managing-banner').textContent='Managing: '+(name||id);
     $('managing-banner').style.display='block';
-    loadTeams(); loadSlots(); loadBookingView(); loadMatches();
+    loadTeams(); loadSlots(); loadBookingView(); loadMatches(); loadBandConfig();
 }
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
@@ -955,42 +1067,98 @@ function loadMatches(){
 function delMatch(id){ if(!confirm('Cancel this match?')) return; db.collection('matches').doc(id).delete().then(()=>{ loadMatches(); loadBookingView(); }); }
 
 // ── Captain: pick slots ───────────────────────────────────────────────────────
+let capBandConfig=null; // {morningEnd, afternoonEnd, quota}
+
 async function loadCapSlots(){
     if(!capTeam?.tournamentId){ $('cap-slots').innerHTML='<p class="empty">No tournament found for your team.</p>'; return; }
     $('cap-slots').innerHTML='<p class="empty">Loading…</p>';
 
-    let slotsSnap,myAvailDoc;
+    let slotsSnap,myAvailDoc,tDoc;
     try{
-        [slotsSnap,myAvailDoc]=await Promise.all([
+        [slotsSnap,myAvailDoc,tDoc]=await Promise.all([
             db.collection('matchSlots').where('tournamentId','==',capTeam.tournamentId).get(),
-            db.collection('teamSlotAvail').where('teamId','==',capTeam.id).where('tournamentId','==',capTeam.tournamentId).limit(1).get()
+            db.collection('teamSlotAvail').where('teamId','==',capTeam.id).where('tournamentId','==',capTeam.tournamentId).limit(1).get(),
+            db.collection('tournaments').doc(capTeam.tournamentId).get()
         ]);
     }catch(e){ $('cap-slots').innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`; return; }
+
+    // load band rules
+    const td=tDoc.exists?tDoc.data():{};
+    capBandConfig=td.bandMorningEnd?{morningEnd:td.bandMorningEnd,afternoonEnd:td.bandAfternoonEnd,quota:td.slotQuota||0}:null;
+    const ruleBox=$('cap-band-rules');
+    if(capBandConfig&&ruleBox){
+        ruleBox.style.display='block';
+        const qTxt=capBandConfig.quota>0?` · Max <strong>${capBandConfig.quota}</strong> slots total`:'';
+        ruleBox.innerHTML=`⚖️ <strong>Fairness rules apply:</strong> You must pick at least 1 slot from each time band across all dates${qTxt}.<br>
+        🌅 Morning = before ${capBandConfig.morningEnd} &nbsp;|&nbsp; ☀️ Afternoon = ${capBandConfig.morningEnd}–${capBandConfig.afternoonEnd} &nbsp;|&nbsp; 🌆 Evening = after ${capBandConfig.afternoonEnd}`;
+    } else if(ruleBox){ ruleBox.style.display='none'; }
 
     if(slotsSnap.empty){ $('cap-slots').innerHTML='<p class="empty">No slots defined yet — your organizer hasn\'t added them.</p>'; return; }
 
     const sorted=[...slotsSnap.docs].sort((a,b)=>(a.data().date+a.data().startTime).localeCompare(b.data().date+b.data().startTime));
     const mySlotIds=myAvailDoc.empty?[]:myAvailDoc.docs[0].data().slotIds||[];
 
-    $('cap-slots').innerHTML=sorted.map(d=>{
-        const s=d.data(), sid=d.id;
-        const checked=mySlotIds.includes(sid)?'checked':'';
-        const brk=s.breakMins>0?` + ${s.breakMins}m break → free at ${s.breakEndTime}`:'';
-        return`<div class="slot-pick">
-            <div class="sp-h">
-                <input type="checkbox" id="chk-${sid}" ${checked}/>
-                <label for="chk-${sid}">📅 ${s.date} &nbsp; 🕐 ${s.startTime} – ${s.endTime} &nbsp; ⏱ ${s.durationMins}m${brk}</label>
-            </div>
-            ${s.label?`<div class="sp-b">${esc(s.label)}</div>`:''}
+    // group by date
+    const byDate={};
+    sorted.forEach(d=>{const dt=d.data().date;(byDate[dt]=byDate[dt]||[]).push(d);});
+
+    $('cap-slots').innerHTML=Object.entries(byDate).map(([date,sdocs])=>{
+        return`<div style="margin-bottom:12px">
+            <div style="font-weight:700;color:#555;margin-bottom:4px">📅 ${date}</div>
+            ${sdocs.map(d=>{
+                const s=d.data(), sid=d.id;
+                const checked=mySlotIds.includes(sid)?'checked':'';
+                const band=capBandConfig?getBandLabel(s.startTime,capBandConfig):'';
+                const brk=s.breakMins>0?` + ${s.breakMins}m break`:'';
+                return`<div class="slot-pick">
+                    <div class="sp-h">
+                        <input type="checkbox" id="chk-${sid}" ${checked}/>
+                        <label for="chk-${sid}">${band?`<span class="band-pill ${band.cls}" style="margin-right:6px">${band.icon}</span>`:''} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
+                    </div>
+                    ${s.label?`<div class="sp-b">${esc(s.label)}</div>`:''}
+                </div>`;
+            }).join('')}
         </div>`;
     }).join('');
     show('cap-save-btn');
     selTId=capTeam.tournamentId;
 }
 
+function getBandLabel(startTime, cfg){
+    if(!cfg) return null;
+    if(startTime<cfg.morningEnd) return{cls:'morning',icon:'🌅 Morning'};
+    if(startTime<cfg.afternoonEnd) return{cls:'afternoon',icon:'☀️ Afternoon'};
+    return{cls:'evening',icon:'🌆 Evening'};
+}
+
 async function saveCapSlots(){
     const allChkIds=[...document.querySelectorAll('[id^="chk-"]')].map(el=>el.id.replace('chk-',''));
     const selected=allChkIds.filter(sid=>document.getElementById('chk-'+sid)?.checked);
+
+    // band + quota enforcement
+    if(capBandConfig){
+        const quota=capBandConfig.quota;
+        if(quota>0&&selected.length>quota){alert(`You can only select up to ${quota} slots. You have ${selected.length} selected.`);return;}
+
+        // get start times for selected slots
+        const allSlotEls=document.querySelectorAll('[id^="chk-"]');
+        const selectedStartTimes=[];
+        allSlotEls.forEach(el=>{
+            if(!el.checked) return;
+            const label=el.closest('.slot-pick')?.querySelector('label')?.textContent||'';
+            const m=label.match(/(\d{2}:\d{2})\s*–/);
+            if(m) selectedStartTimes.push(m[1]);
+        });
+        const hasMorning=selectedStartTimes.some(t=>t<capBandConfig.morningEnd);
+        const hasAfternoon=selectedStartTimes.some(t=>t>=capBandConfig.morningEnd&&t<capBandConfig.afternoonEnd);
+        const hasEvening=selectedStartTimes.some(t=>t>=capBandConfig.afternoonEnd);
+        const missing=[];
+        if(!hasMorning) missing.push('🌅 Morning (before '+capBandConfig.morningEnd+')');
+        if(!hasAfternoon) missing.push('☀️ Afternoon ('+capBandConfig.morningEnd+'–'+capBandConfig.afternoonEnd+')');
+        if(!hasEvening) missing.push('🌆 Evening (after '+capBandConfig.afternoonEnd+')');
+        if(missing.length){alert('Fairness rule: you must pick at least 1 slot from each band.\n\nMissing:\n'+missing.join('\n'));return;}
+    }
+
     if(!selected.length&&!confirm('You haven\'t selected any slots. Save anyway?')) return;
     const existing=await db.collection('teamSlotAvail')
         .where('teamId','==',capTeam.id).where('tournamentId','==',capTeam.tournamentId).limit(1).get();
@@ -1058,6 +1226,139 @@ function loadMyBusy(){
             <button class="bsm br" onclick="delBusy('${b.id}')">Remove</button></div>`).join('')}</div>`;
         }).join('');
     }).catch(e=>{ $('my-busy').innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`; });
+}
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+async function generateFixtures(){
+    if(!selTId){alert('No tournament selected.');return;}
+    if(!confirm('This will delete any existing fixtures and regenerate from current teams. Continue?')) return;
+
+    const [tDoc,teamsSnap]=await Promise.all([
+        db.collection('tournaments').doc(selTId).get(),
+        db.collection('teams').where('tournamentId','==',selTId).get()
+    ]);
+    const t=tDoc.data();
+    const teams=teamsSnap.docs.map(d=>({id:d.id,...d.data()}));
+    if(teams.length<2){alert('Need at least 2 teams.');return;}
+
+    const format=t.format||'roundrobin';
+    const numGroups=t.numGroups||1;
+    const fixtures=[];
+
+    if(format==='roundrobin'){
+        for(let i=0;i<teams.length;i++)
+            for(let j=i+1;j<teams.length;j++)
+                fixtures.push({team1Id:teams[i].id,team1Name:teams[i].name,team2Id:teams[j].id,team2Name:teams[j].name,groupName:'',status:'pending'});
+    } else {
+        // split teams into groups round-robin style
+        const groups={};
+        teams.forEach((tm,idx)=>{
+            const g='Group '+String.fromCharCode(65+idx%numGroups);
+            (groups[g]=groups[g]||[]).push(tm);
+        });
+        Object.entries(groups).forEach(([grp,gteams])=>{
+            for(let i=0;i<gteams.length;i++)
+                for(let j=i+1;j<gteams.length;j++)
+                    fixtures.push({team1Id:gteams[i].id,team1Name:gteams[i].name,team2Id:gteams[j].id,team2Name:gteams[j].name,groupName:grp,status:'pending'});
+        });
+    }
+
+    const btn=document.querySelector('#pane-fixtures .sec button.bg');
+    if(btn){btn.disabled=true;btn.textContent='Generating…';}
+    try{
+        // delete old fixtures
+        const old=await db.collection('fixtures').where('tournamentId','==',selTId).get();
+        const batch=db.batch();
+        old.docs.forEach(d=>batch.delete(d.ref));
+        fixtures.forEach(f=>batch.set(db.collection('fixtures').doc(),{...f,tournamentId:selTId,createdAt:new Date()}));
+        await batch.commit();
+        $('fix-gen-status').textContent=`✅ ${fixtures.length} fixtures generated`;
+        loadFixtures('all');
+    }catch(e){alert('Error: '+e.message);}
+    finally{if(btn){btn.disabled=false;btn.textContent='⚡ Generate Fixtures from Teams';}}
+}
+
+async function loadFixtures(filter='all'){
+    if(!selTId) return;
+    let q=db.collection('fixtures').where('tournamentId','==',selTId);
+    const snap=await q.get().catch(e=>{$('fixtures-list').innerHTML=`<p class="empty" style="color:#c0392b">Error: ${e.message}</p>`;return null;});
+    if(!snap) return;
+    let docs=[...snap.docs];
+    if(filter==='pending') docs=docs.filter(d=>d.data().status==='pending');
+    docs.sort((a,b)=>(a.data().groupName+a.data().team1Name).localeCompare(b.data().groupName+b.data().team1Name));
+    $('fix-count').textContent=`(${docs.length} fixtures${filter==='pending'?' pending':''})`;
+    if(!docs.length){$('fixtures-list').innerHTML='<p class="empty">No fixtures found.</p>';return;}
+    // group by groupName
+    const byGroup={};
+    docs.forEach(d=>{const g=d.data().groupName||'All';(byGroup[g]=byGroup[g]||[]).push(d);});
+    $('fixtures-list').innerHTML=Object.entries(byGroup).map(([grp,fdocs])=>{
+        const grpHdr=grp!=='All'?`<div class="grp-hdr">🏅 ${esc(grp)}</div>`:'';
+        return grpHdr+fdocs.map(d=>{
+            const f=d.data();
+            const statusClass=f.status||'pending';
+            const badge=`<span class="fix-badge ${statusClass}">${statusClass==='pending'?'⏳ Pending':statusClass==='scheduled'?'📅 Scheduled':'✅ Played'}</span>`;
+            const actions=f.status==='pending'
+                ?`<button class="bsm bg" onclick="markFixturePlayed('${d.id}')">Mark Played</button><button class="bsm br" onclick="delFixture('${d.id}')">Remove</button>`
+                :f.status==='scheduled'
+                ?`<button class="bsm bg" onclick="markFixturePlayed('${d.id}')">Mark Played</button>`
+                :`<button class="bsm br" onclick="delFixture('${d.id}')">Remove</button>`;
+            return`<div class="fix-card ${statusClass}">
+                <div style="flex:1"><div class="fix-vs">👥 ${esc(f.team1Name)} <span style="color:#667eea">vs</span> ${esc(f.team2Name)}</div></div>
+                <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">${badge}${actions}</div>
+            </div>`;
+        }).join('');
+    }).join('');
+}
+
+function markFixturePlayed(id){
+    db.collection('fixtures').doc(id).update({status:'played'}).then(()=>loadFixtures('all'));
+}
+
+function delFixture(id){
+    if(!confirm('Remove this fixture?')) return;
+    db.collection('fixtures').doc(id).delete().then(()=>loadFixtures('all'));
+}
+
+async function populateManualFixtureDropdowns(){
+    if(!selTId) return;
+    const snap=await db.collection('teams').where('tournamentId','==',selTId).get();
+    const opts='<option value="">-- Select team --</option>'+snap.docs.map(d=>`<option value="${d.id}|${esc(d.data().name)}">${esc(d.data().name)}</option>`).join('');
+    const t1=$('mf-t1'), t2=$('mf-t2');
+    if(t1) t1.innerHTML=opts;
+    if(t2) t2.innerHTML=opts;
+}
+
+function addManualFixture(){
+    const t1raw=v('mf-t1'), t2raw=v('mf-t2'), grp=v('mf-grp');
+    if(!t1raw||!t2raw){alert('Select both teams.');return;}
+    if(t1raw===t2raw){alert('Teams must differ.');return;}
+    if(!selTId){alert('No tournament selected.');return;}
+    const [t1id,t1name]=t1raw.split('|');
+    const [t2id,t2name]=t2raw.split('|');
+    db.collection('fixtures').add({tournamentId:selTId,team1Id:t1id,team1Name:t1name,team2Id:t2id,team2Name:t2name,groupName:grp||'',status:'pending',createdAt:new Date()})
+    .then(()=>{['mf-t1','mf-t2','mf-grp'].forEach(id=>{const e=$(id);if(e)e.value='';});loadFixtures('all');})
+    .catch(e=>alert('Error: '+e.message));
+}
+
+// ── Band config ────────────────────────────────────────────────────────────────
+async function saveBandConfig(){
+    if(!selTId){alert('No tournament selected.');return;}
+    const morningEnd=v('band-morning-end'), afternoonEnd=v('band-afternoon-end');
+    const quota=parseInt(v('band-quota')||'0');
+    if(!morningEnd||!afternoonEnd){alert('Set both morning and afternoon end times.');return;}
+    if(morningEnd>=afternoonEnd){alert('Morning must end before afternoon.');return;}
+    await db.collection('tournaments').doc(selTId).update({bandMorningEnd:morningEnd,bandAfternoonEnd:afternoonEnd,slotQuota:quota});
+    const s=$('band-save-status'); if(s){s.textContent='Saved!';setTimeout(()=>s.textContent='',3000);}
+}
+
+async function loadBandConfig(){
+    if(!selTId) return;
+    const doc=await db.collection('tournaments').doc(selTId).get();
+    if(!doc.exists) return;
+    const t=doc.data();
+    if(t.bandMorningEnd){const e=$('band-morning-end');if(e)e.value=t.bandMorningEnd;}
+    if(t.bandAfternoonEnd){const e=$('band-afternoon-end');if(e)e.value=t.bandAfternoonEnd;}
+    if(t.slotQuota!==undefined){const e=$('band-quota');if(e)e.value=t.slotQuota;}
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
