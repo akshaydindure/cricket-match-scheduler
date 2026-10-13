@@ -366,9 +366,9 @@
                             <span class="band-lbl">= after afternoon</span>
                         </div>
                         <div class="band-row" style="border:none;padding-top:10px">
-                            <span class="band-lbl">Matches per team</span>
-                            <input type="number" id="band-matches" style="width:80px;margin:0" placeholder="e.g. 4" min="1"/>
-                            <span style="font-size:.8em;color:#aaa">slots divided into this many bands (e.g. 4 matches = 4 bands)</span>
+                            <span class="band-lbl">Divide slots into</span>
+                            <input type="number" id="band-matches" style="width:80px;margin:0" placeholder="e.g. 7" min="1"/>
+                            <span style="font-size:.8em;color:#aaa">equal bands &mdash; captain must pick 1 from each (set to matches per team, e.g. 7)</span>
                         </div>
                         <div class="band-row" style="border:none">
                             <span class="band-lbl">Max slots captain can pick (quota)</span>
@@ -1107,15 +1107,20 @@ async function loadCapSlots(){
     const allSortedKeys=sorted.map(d=>d.data().date+'|'+d.data().startTime); // sorted list of all slot keys
     const numBands=capBandConfig.matchesPerTeam>0
         ? Math.min(capBandConfig.matchesPerTeam, allSortedKeys.length)
-        : Math.min(4, allSortedKeys.length);
+        : null; // organizer hasn't configured yet
     // for the chip label we still use unique times per day for display
     const uniqueTimes=[...new Set(sorted.map(d=>d.data().startTime))].sort();
 
     if(ruleBox){
-        const qTxt=capBandConfig.quota>0?` · Max <strong>${capBandConfig.quota}</strong> slots total`:'';
-        const bandChips=[...Array(numBands)].map((_,i)=>`<span class="band-pill" style="background:${BAND_BG[i%4]};color:${BAND_COLORS[i%4]}">Q${i+1}</span>`).join(' ');
-        ruleBox.style.display='block';
-        ruleBox.innerHTML=`⚖️ <strong>Fairness rules:</strong> Pick at least 1 slot from each of the ${numBands} time bands${qTxt}.<br><div style="margin-top:5px">${bandChips}</div>`;
+        if(!numBands){
+            ruleBox.style.display='block';
+            ruleBox.innerHTML=`⚠️ Your organizer hasn't configured fairness rules yet. You can pick any slots for now.`;
+        } else {
+            const qTxt=capBandConfig.quota>0?` · Max <strong>${capBandConfig.quota}</strong> slots total`:'';
+            const bandChips=[...Array(numBands)].map((_,i)=>`<span class="band-pill" style="background:${BAND_BG[i%4]};color:${BAND_COLORS[i%4]}">Q${i+1}</span>`).join(' ');
+            ruleBox.style.display='block';
+            ruleBox.innerHTML=`⚖️ <strong>Fairness rules:</strong> Pick at least 1 slot from each of the ${numBands} time bands${qTxt}.<br><div style="margin-top:5px">${bandChips}</div>`;
+        }
     }
 
     // group by date
@@ -1132,8 +1137,8 @@ async function loadCapSlots(){
                 const brk=s.breakMins>0?` + ${s.breakMins}m break`:'';
                 return`<div class="slot-pick">
                     <div class="sp-h">
-                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" data-band="${getBandIndexByPos(allSortedKeys.indexOf(s.date+'|'+s.startTime),allSortedKeys.length,numBands)}" ${checked}/>
-                        <label for="chk-${sid}">${getBandChipByPos(allSortedKeys.indexOf(s.date+'|'+s.startTime),allSortedKeys.length,numBands)} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
+                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" ${numBands?`data-band="${getBandIndexByPos(allSortedKeys.indexOf(s.date+'|'+s.startTime),allSortedKeys.length,numBands)}"`:''}  ${checked}/>
+                        <label for="chk-${sid}">${numBands?getBandChipByPos(allSortedKeys.indexOf(s.date+'|'+s.startTime),allSortedKeys.length,numBands):''} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
                     </div>
                     ${s.label?`<div class="sp-b">${esc(s.label)}</div>`:''}
                 </div>`;
@@ -1159,12 +1164,14 @@ async function saveCapSlots(){
     if(capBandConfig&&capBandConfig.quota>0&&selected.length>capBandConfig.quota){
         alert(`You can only select up to ${capBandConfig.quota} slots. You have ${selected.length} selected.`);return;
     }
-    // 4-band enforcement: each slot has data-band (0-3), must cover all bands present
+    // band enforcement: only if organizer configured number of bands
     const allChks=[...document.querySelectorAll('[id^="chk-"]')];
     const bandsPresent=new Set(allChks.map(el=>el.getAttribute('data-band')).filter(b=>b!==null&&b!==''));
-    const bandsSelected=new Set(allChks.filter(el=>el.checked).map(el=>el.getAttribute('data-band')).filter(Boolean));
-    const missing=[...bandsPresent].filter(b=>!bandsSelected.has(b)).map(b=>BAND_LABELS[+b]?.label||('Quarter '+(+b+1)));
-    if(missing.length){alert('Fairness rule: pick at least 1 slot from each time quarter.\n\nMissing:\n'+missing.join('\n'));return;}
+    if(bandsPresent.size>0){
+        const bandsSelected=new Set(allChks.filter(el=>el.checked).map(el=>el.getAttribute('data-band')).filter(Boolean));
+        const missing=[...bandsPresent].sort((a,b)=>+a-+b).filter(b=>!bandsSelected.has(b)).map(b=>'Quarter '+(+b+1));
+        if(missing.length){alert('Fairness rule: pick at least 1 slot from each time band.\n\nMissing:\n'+missing.join('\n'));return;}
+    }
 
     if(!selected.length&&!confirm('You haven\'t selected any slots. Save anyway?')) return;
     const existing=await db.collection('teamSlotAvail')
