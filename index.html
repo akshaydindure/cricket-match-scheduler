@@ -1093,8 +1093,8 @@ async function loadCapSlots(){
     if(ruleBox){
         ruleBox.style.display='block';
         const qTxt=capBandConfig.quota>0?` · Max <strong>${capBandConfig.quota}</strong> slots total`:'';
-        ruleBox.innerHTML=`⚖️ <strong>Fairness rules:</strong> You must pick at least 1 slot from each time band across all tournament dates${qTxt}.<br>
-        🌅 Morning = before ${capBandConfig.morningEnd} &nbsp;|&nbsp; ☀️ Afternoon = ${capBandConfig.morningEnd}–${capBandConfig.afternoonEnd} &nbsp;|&nbsp; 🌆 Evening = after ${capBandConfig.afternoonEnd}`;
+        ruleBox.innerHTML=`⚖️ <strong>Fairness rules:</strong> You must pick at least 1 slot from each available time band${qTxt}.<br>
+        🌅 Morning = before ${capBandConfig.morningEnd} &nbsp;|&nbsp; ☀️ Afternoon = ${capBandConfig.morningEnd}–${capBandConfig.afternoonEnd}${capBandConfig.afternoonEnd?` &nbsp;|&nbsp; 🌆 Evening = after ${capBandConfig.afternoonEnd} <em style="color:#aaa">(only required if evening slots exist)</em>`:''}`;
     }
 
     if(slotsSnap.empty){ $('cap-slots').innerHTML='<p class="empty">No slots defined yet — your organizer hasn\'t added them.</p>'; return; }
@@ -1149,9 +1149,16 @@ async function saveCapSlots(){
             .filter(el=>el.checked)
             .map(el=>el.getAttribute('data-start'))
             .filter(Boolean);
-        const hasMorning=selectedStartTimes.some(t=>t<capBandConfig.morningEnd);
-        const hasAfternoon=selectedStartTimes.some(t=>t>=capBandConfig.morningEnd&&t<capBandConfig.afternoonEnd);
-        const hasEvening=selectedStartTimes.some(t=>t>=capBandConfig.afternoonEnd);
+        // only require bands that actually have slots in this tournament
+        const allStartTimes=[...document.querySelectorAll('[id^="chk-"]')].map(el=>el.getAttribute('data-start')).filter(Boolean);
+        const bandsExist={
+            morning:allStartTimes.some(t=>t<capBandConfig.morningEnd),
+            afternoon:allStartTimes.some(t=>t>=capBandConfig.morningEnd&&t<capBandConfig.afternoonEnd),
+            evening:allStartTimes.some(t=>t>=capBandConfig.afternoonEnd)
+        };
+        const hasMorning=!bandsExist.morning||selectedStartTimes.some(t=>t<capBandConfig.morningEnd);
+        const hasAfternoon=!bandsExist.afternoon||selectedStartTimes.some(t=>t>=capBandConfig.morningEnd&&t<capBandConfig.afternoonEnd);
+        const hasEvening=!bandsExist.evening||selectedStartTimes.some(t=>t>=capBandConfig.afternoonEnd);
         const missing=[];
         if(!hasMorning) missing.push('🌅 Morning (before '+capBandConfig.morningEnd+')');
         if(!hasAfternoon) missing.push('☀️ Afternoon ('+capBandConfig.morningEnd+'–'+capBandConfig.afternoonEnd+')');
