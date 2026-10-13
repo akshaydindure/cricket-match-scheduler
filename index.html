@@ -1115,13 +1115,14 @@ async function loadCapSlots(){
     const sorted=[...slotsSnap.docs].sort((a,b)=>(a.data().date+a.data().startTime).localeCompare(b.data().date+b.data().startTime));
     const mySlotIds=myAvailDoc.empty?[]:myAvailDoc.docs[0].data().slotIds||[];
 
-    // divide all slots across all dates into N bands
+    // bands are TIME-OF-DAY based: divide unique start times into N bands
+    // 06:30 on ANY date = Q1, 14:00 on ANY date = Q3 — date doesn't matter
+    const uniqueTimes=[...new Set(sorted.map(d=>d.data().startTime))].sort();
     const allSortedKeys=sorted.map(d=>d.data().date+'|'+d.data().startTime);
-    const numBands=capBandConfig.disabled ? 0 : Math.min(capBandConfig.numBands||4, allSortedKeys.length);
+    const numBands=capBandConfig.disabled ? 0 : Math.min(capBandConfig.numBands||4, uniqueTimes.length);
     const requiredBands=capBandConfig.requiredBands>0
         ? Math.min(capBandConfig.requiredBands, numBands)
         : numBands;
-    const uniqueTimes=[...new Set(sorted.map(d=>d.data().startTime))].sort();
 
     if(ruleBox){
         if(capBandConfig.disabled||numBands===0){
@@ -1150,8 +1151,8 @@ async function loadCapSlots(){
                 const brk=s.breakMins>0?` + ${s.breakMins}m break`:'';
                 return`<div class="slot-pick">
                     <div class="sp-h">
-                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" ${numBands?`data-band="${getBandIndexByPos(allSortedKeys.indexOf(s.date+'|'+s.startTime),allSortedKeys.length,numBands)}"`:''}  ${checked}/>
-                        <label for="chk-${sid}">${numBands?getBandChipByPos(allSortedKeys.indexOf(s.date+'|'+s.startTime),allSortedKeys.length,numBands):''} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
+                        <input type="checkbox" id="chk-${sid}" data-start="${s.startTime}" ${numBands?`data-band="${getBandIndex(s.startTime,uniqueTimes,numBands)}"`:''}  ${checked}/>
+                        <label for="chk-${sid}">${numBands?getBandChip(s.startTime,uniqueTimes,numBands):''} 🕐 ${s.startTime} – ${s.endTime} ⏱ ${s.durationMins}m${brk}</label>
                     </div>
                     ${s.label?`<div class="sp-b">${esc(s.label)}</div>`:''}
                 </div>`;
