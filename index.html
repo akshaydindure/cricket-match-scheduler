@@ -116,6 +116,9 @@
         .managing-banner{background:#667eea;color:#fff;padding:11px 16px;border-radius:8px;margin-bottom:14px;font-weight:600;font-size:.95em}
         .info{background:#fff8e1;border-left:4px solid #f39c12;padding:11px 14px;border-radius:8px;margin-bottom:14px;font-size:.87em;color:#7d5a00}
         .empty{color:#aaa;font-style:italic;font-size:.86em;padding:5px 0}
+        .spin{display:inline-block;width:18px;height:18px;border:3px solid #ddd;border-top-color:#667eea;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .loading-msg{color:#aaa;font-size:.86em;padding:5px 0;display:flex;align-items:center}
         hr{border:none;border-top:1px solid #eee;margin:13px 0}
 
         /* match table */
@@ -521,6 +524,11 @@ firebase.initializeApp({
 const db=firebase.firestore(), auth=firebase.auth();
 let me=null, myRole=null, selTId=null, capTeam=null;
 let lastActivity=Date.now(), sessionInterval=null;
+// simple in-memory cache — keyed by tournamentId or 'all'
+const _cache={};
+function cacheGet(key){ return _cache[key]; }
+function cacheSet(key,val){ _cache[key]=val; }
+function cacheInvalidate(...keys){ keys.forEach(k=>delete _cache[k]); }
 
 // ── Session Timeout ────────────────────────────────────────────────────────────
 function resetActivity(){
@@ -703,18 +711,29 @@ function createT(){
     db.collection('tournaments').add({name,desc,organizers:org?[org]:[],createdBy:me.email,format,numGroups:ngroups,status:'setup',createdAt:new Date()}).then(()=>{
         if(org) db.collection('users').doc(org).set({email:org,role:'organizer'},{merge:true});
         ['t-name','t-org','t-desc','t-ngroups'].forEach(id=>$(id).value='');
+        cacheInvalidate('tournaments');
         loadAllT();
     }).catch(e=>alert('Failed: '+e.message))
     .finally(()=>{ btn.disabled=false; btn.textContent='➕ Create Tournament'; });
 }
 
+const LOAD_SPINNER='<p class="loading-msg"><span class="spin"></span>Loading…</p>';
+
+function renderTournaments(docs){
+    return docs.length===0?'<p class="empty">None yet.</p>':docs.map(d=>{
+        const t=d.data(), org=t.organizers?.length?t.organizers.join(', '):'<em>You</em>';
+        return`<div class="card" id="tc-${d.id}"><div style="flex:1"><div class="ct">🏏 ${esc(t.name)}</div><div class="cs">Organizer: ${org}</div></div>
+        <div><button class="bsm" onclick="ownerPick('${d.id}','${esc(t.name)}')">Manage</button><button class="bsm br" onclick="delT('${d.id}','${esc(t.name)}')">Delete</button></div></div>`;
+    }).join('');
+}
+
 function loadAllT(){
+    const cached=cacheGet('tournaments');
+    if(cached){ $('all-t').innerHTML=renderTournaments(cached); return; }
+    $('all-t').innerHTML=LOAD_SPINNER;
     db.collection('tournaments').get().then(snap=>{
-        $('all-t').innerHTML=snap.empty?'<p class="empty">None yet.</p>':snap.docs.map(d=>{
-            const t=d.data(), org=t.organizers?.length?t.organizers.join(', '):'<em>You</em>';
-            return`<div class="card" id="tc-${d.id}"><div style="flex:1"><div class="ct">🏏 ${esc(t.name)}</div><div class="cs">Organizer: ${org}</div></div>
-            <div><button class="bsm" onclick="ownerPick('${d.id}','${esc(t.name)}')">Manage</button><button class="bsm br" onclick="delT('${d.id}','${esc(t.name)}')">Delete</button></div></div>`;
-        }).join('');
+        cacheSet('tournaments', snap.docs);
+        $('all-t').innerHTML=renderTournaments(snap.docs);
     });
 }
 
@@ -727,9 +746,25 @@ function ownerPick(id,name){
     loadTeams();
 }
 
-function delT(id,name){
-    if(!confirm('Delete tournament "'+name+'"? This cannot be undone.')) return;
-    db.collection('tournaments').doc(id).delete().then(()=>{
+async function delT(id,name){
+    if(!confirm('Delete tournament "'+name+'" and ALL its teams, slots, matches and fixtures? This cannot be undone.')) return;
+    try{
+        // delete all subcollections in parallel
+        const cols=['teams','matchSlots','teamSlotAvail','matches','fixtures'];
+        await Promise.all(cols.map(async col=>{
+            const snap=await db.collection(col).where('tournamentId','==',id).get();
+            if(snap.empty) return;
+            // Firestore batch limit is 500 writes
+            const chunks=[];
+            for(let i=0;i<snap.docs.length;i+=400) chunks.push(snap.docs.slice(i,i+400));
+            for(const chunk of chunks){
+                const batch=db.batch();
+                chunk.forEach(d=>batch.delete(d.ref));
+                await batch.commit();
+            }
+        }));
+        await db.collection('tournaments').doc(id).delete();
+        cacheInvalidate('tournaments','teams:'+id,'slots:'+id,'matches:'+id);
         loadAllT();
         if(selTId===id){
             selTId=null;
@@ -738,7 +773,7 @@ function delT(id,name){
                 const e=$(el); if(e) e.innerHTML='<p class="empty">Select a tournament above.</p>';
             });
         }
-    }).catch(e=>alert('Delete failed: '+e.message));
+    }catch(e){ alert('Delete failed: '+e.message); }
 }
 
 // ── Organizer ─────────────────────────────────────────────────────────────────
@@ -780,23 +815,45 @@ function addTeam(){
         playerCount:+pl, tournamentId:selTId, createdAt:new Date()}).then(()=>{
         db.collection('users').doc(capEmail).set({name:capName, email:capEmail, role:'captain'},{merge:true});
         ['tm-name','tm-capname','tm-cap','tm-pl'].forEach(id=>$(id).value='');
+        cacheInvalidate('teams:'+selTId);
         loadTeams();
     }).catch(e=>alert('Error: '+e.message));
 }
 
-function delTeam(id){ db.collection('teams').doc(id).delete().then(loadTeams); }
+async function delTeam(id){
+    try{
+        const avail=await db.collection('teamSlotAvail').where('teamId','==',id).get();
+        if(!avail.empty){
+            const batch=db.batch();
+            avail.docs.forEach(d=>batch.delete(d.ref));
+            await batch.commit();
+        }
+        await db.collection('teams').doc(id).delete();
+        cacheInvalidate('teams:'+selTId);
+        loadTeams();
+    }catch(e){ alert('Delete failed: '+e.message); }
+}
 
+function renderTeamsList(docs){
+    if(!docs.length) return '<p class="empty">No teams.</p>';
+    return docs.map(d=>{
+        const t=d.data();
+        const capDetail=[t.captainName?esc(t.captainName):'',t.captainEmail?`✉️ ${esc(t.captainEmail)}`:''].filter(Boolean).join(' · ');
+        return`<div class="card"><div style="flex:1">
+            <div class="ct">👥 ${esc(t.name)}</div>
+            <div class="cs">Captain: ${capDetail} · ${t.playerCount} players</div>
+        </div><button class="bsm br" onclick="delTeam('${d.id}')">Remove</button></div>`;
+    }).join('');
+}
 function loadTeams(){
     if(!selTId) return;
+    const ck='teams:'+selTId;
+    const cached=cacheGet(ck);
+    if(cached){ $('teams-list').innerHTML=renderTeamsList(cached); return; }
+    $('teams-list').innerHTML=LOAD_SPINNER;
     db.collection('teams').where('tournamentId','==',selTId).get().then(snap=>{
-        $('teams-list').innerHTML=snap.empty?'<p class="empty">No teams.</p>':snap.docs.map(d=>{
-            const t=d.data();
-            const capDetail=[t.captainName?esc(t.captainName):'', t.captainEmail?`✉️ ${esc(t.captainEmail)}`:''].filter(Boolean).join(' · ');
-            return`<div class="card"><div style="flex:1">
-                <div class="ct">👥 ${esc(t.name)}</div>
-                <div class="cs">Captain: ${capDetail} · ${t.playerCount} players</div>
-            </div><button class="bsm br" onclick="delTeam('${d.id}')">Remove</button></div>`;
-        }).join('');
+        cacheSet(ck, snap.docs);
+        $('teams-list').innerHTML=renderTeamsList(snap.docs);
     });
 }
 
