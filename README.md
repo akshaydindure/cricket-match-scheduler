@@ -112,3 +112,4 @@ firebase deploy --only hosting
 ```
 
 Requires [Firebase CLI](https://firebase.google.com/docs/cli) and access to the `cricket-scheduler-771bd` project.
+
